@@ -2,8 +2,6 @@
 
 A digital home for families in Zimbabwe and the diaspora when they lose someone. It brings funeral planning, cover, burial arrangements, remembrance and aftercare into one place, so a grieving family has one place to go instead of many phone calls.
 
-> This is a sample prototype. All plans, prices, policies, people and memorials in it are made up.
-
 ![New Landing page of Fidelity Funeral Services](https://github.com/rose-aiia/-fidelity-funeral-services-system/blob/main/frontend/docs/screenshots/cuirrenthomepage.png)
 
 ## Who it is for
@@ -15,6 +13,10 @@ A digital home for families in Zimbabwe and the diaspora when they lose someone.
 - **Funeral professionals**: managing the services they deliver for families.
 
 ## What families can do
+
+### Start a funeral case or request cover
+
+At `/funeral-support`, a policyholder or relative can enter a policy number, review the matched sample policy and covered members, then submit funeral details and a service checklist. Fidelity staff review policy terms and assign the case stages. A walk-in client can select a plan and requested services, then submit online or ask to complete the application at a Fidelity office.
 
 ### Get help straight away
 
@@ -63,16 +65,17 @@ A staff portal at `/provider-portal` for administrators and funeral service prov
 
 Switching a provider off stops new requests going to them and hides their products from the marketplace.
 
-## Trying the demo
+## Run the application
 
-In `frontend/`, run `npm install` and then `npm run dev`, and open the address it prints.
+The frontend defaults to the live API (`VITE_API_MODE=live`) and the backend defaults to port 4000. Configure the database, secure session secret, live SMS provider, and WhatsApp bridge before starting customer or staff services. Do not use sample policy or demo identity information in a production deployment.
 
-- On the sign-in page, pick one of the **demo personas** to get in with one click: a policyholder, a new family, an administrator, a funeral provider and a marketplace vendor.
-- The one-time code is always `123456`.
-- To link a policy by hand, use policy number `FLA-318227` with ID `08-765432-B-15`.
-- Everything you do is saved in your own browser only.
+Development and deployment requirements are in [frontend/docs/development.md](frontend/docs/development.md).
 
-How the app is built, and how to connect it to a real backend, is in [frontend/docs/development.md](frontend/docs/development.md).
+## Policy workbook imports
+
+Administrators can upload approved Excel policy workbooks using either supported layout. Signed-in customers can register policy-covered funeral cases or request walk-in coverage consultations; Fidelity administrators can assign coordinators. With explicit reporter consent, the WhatsApp bridge creates a private group for the verified contact and adds assigned Fidelity staff. Customers can invite relatives only after confirming their consent. Cases, assignments, group status, participant consent and audit events are stored server-side.
+
+Apply the Prisma migrations, provision the first administrator using the guarded `backend` `npm run admin:provision` command and the required `ADMIN_PHONE`, `ADMIN_FIRST_NAME`, `ADMIN_LAST_NAME`, and `ALLOW_ADMIN_PROVISIONING=I_UNDERSTAND` environment values, and configure live SMS before enabling customer access. WhatsApp group creation also requires a connected bridge paired to a dedicated Fidelity-owned number and an enabled sending setting. The bridge uses Baileys, an unofficial WhatsApp Web client; obtain explicit compliance approval before production deployment. Real groups are created only after the reporter's consent is recorded.
 
 ## Project layout
 

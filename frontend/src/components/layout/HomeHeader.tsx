@@ -106,8 +106,8 @@ export function HomeHeader() {
             </Link>
           )}
 
-          <Link className="btn btn--primary btn--sm site-nav__cta" to={anchor('quote-form')} onClick={closeMenu}>
-            Request a quote
+          <Link className="btn btn--primary btn--sm site-nav__cta" to={paths.funeralSupport} onClick={closeMenu}>
+            Funeral support
           </Link>
         </nav>
 

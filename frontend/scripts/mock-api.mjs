@@ -1203,7 +1203,9 @@ async function handleAdmin(req, res, pathname, searchParams) {
 }
 
 async function handle(req, res) {
-  const { pathname, searchParams } = new URL(req.url, 'http://localhost')
+  const url = new URL(req.url, 'http://localhost')
+  const pathname = url.pathname.replace(/^\/api(?=\/|$)/, '')
+  const { searchParams } = url
 
   if (pathname === '/__fail') {
     failing = searchParams.get('on') === '1'

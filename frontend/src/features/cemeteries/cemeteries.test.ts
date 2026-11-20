@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cemeteries, searchCemeteries, searchGraves } from './data'
+import { cemeteries, googleMapsSearchUrl, searchCemeteries, searchGraves } from './data'
 
 describe('cemetery search', () => {
   it('returns everything for an empty query', () => {
@@ -23,5 +23,18 @@ describe('grave search', () => {
   })
   it('flags unverified records', () => {
     expect(searchGraves('tendai moyo', 2020)[0].verified).toBe(false)
+  })
+})
+
+describe('Google Maps links', () => {
+  it('encodes the cemetery search without including deceased or plot details', () => {
+    const url = new URL(googleMapsSearchUrl('Sample Cemetery, Harare'))
+    expect(url.origin).toBe('https://www.google.com')
+    expect(url.pathname).toBe('/maps/search/')
+    expect(url.searchParams.get('query')).toBe('Sample Cemetery, Harare')
+  })
+
+  it('returns a valid empty search URL for an empty query', () => {
+    expect(googleMapsSearchUrl('')).toBe('https://www.google.com/maps/search/?api=1&query=')
   })
 })

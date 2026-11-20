@@ -39,6 +39,7 @@ export const accountNav: AccountNavItem[] = [
   { label: 'Overview', to: paths.account, icon: 'home', end: true },
   { label: 'My policy', to: paths.accountPolicy, icon: 'shield' },
   { label: 'Requests', to: paths.accountRequests, icon: 'chat' },
+  { label: 'Funeral cases', to: paths.accountFuneralCases, icon: 'archive' },
   { label: 'Family History', to: paths.accountFamilyHistory, icon: 'users' },
   { label: 'Records', to: paths.accountFuneralRecords, icon: 'archive' },
   { label: 'Chema Wallet', to: paths.accountChemaWallet, icon: 'wallet' },
@@ -63,6 +64,8 @@ export function portalNav(role: 'admin' | 'provider'): AccountNavItem[] {
     ...common,
     { label: 'Customers', to: paths.portalCustomers, icon: 'users' },
     { label: 'Providers', to: paths.portalProviders, icon: 'shield' },
+    { label: 'Funeral cases', to: paths.portalFuneralCases, icon: 'archive' },
+    { label: 'Policy import', to: paths.portalPolicyImport, icon: 'file' },
     { label: 'Activity', to: paths.portalActivity, icon: 'clock' },
     { label: 'Messaging', to: paths.portalMessaging, icon: 'chat' },
   ]

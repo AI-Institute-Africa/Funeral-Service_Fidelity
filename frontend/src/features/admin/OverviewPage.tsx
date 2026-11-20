@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '@/components/ui/Icon'
+import { DonutChart } from '@/components/ui/DashboardCharts'
 import { QueryState } from '@/components/ui/QueryState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { paths } from '@/config/routes'
@@ -119,17 +120,26 @@ function OverviewBody({ overview, role }: { overview: Overview; role: 'admin' | 
           {overview.ordersByStatus.length === 0 ? (
             <p className="muted">No orders yet.</p>
           ) : (
-            <ul className="bars">
-              {overview.ordersByStatus.map((entry) => (
-                <li key={entry.status} className="bar">
-                  <span>{orderStatusDisplay[entry.status].label}</span>
-                  <span className="bar__track" aria-hidden="true">
-                    <span className="bar__fill" style={{ width: `${(entry.count / max) * 100}%` }} />
-                  </span>
-                  <span className="bar__count">{entry.count}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <DonutChart
+                title="Order mix"
+                subtitle="Current orders by status"
+                data={overview.ordersByStatus
+                  .filter((entry) => entry.count > 0)
+                  .map((entry) => ({ label: orderStatusDisplay[entry.status].label, value: entry.count }))}
+              />
+              <ul className="bars">
+                {overview.ordersByStatus.map((entry) => (
+                  <li key={entry.status} className="bar">
+                    <span>{orderStatusDisplay[entry.status].label}</span>
+                    <span className="bar__track" aria-hidden="true">
+                      <span className="bar__fill" style={{ width: `${(entry.count / max) * 100}%` }} />
+                    </span>
+                    <span className="bar__count">{entry.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </section>
       </div>

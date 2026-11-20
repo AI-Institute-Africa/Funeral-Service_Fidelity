@@ -5,6 +5,10 @@ import { requestLogger } from './middleware/requestLogger'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler'
 import healthRoute from './routes/healthRoute'
 import { createAlertsRuntime } from './alerts'
+import { loadSessionUser } from './middleware/session'
+import { createAuthRouter } from './routes/authRoutes'
+import { createPolicyRouter } from './routes/policyRoutes'
+import { createFuneralCaseRouter } from './routes/funeralCaseRoutes'
 
 /** Async because the alerts runtime connects to the job queue before its routes can be mounted. */
 export async function createApp() {
@@ -17,6 +21,7 @@ export async function createApp() {
   app.use(express.json())
   app.use(express.urlencoded({ extended: false })) // Twilio and Africa's Talking post forms
   app.use(requestLogger)
+  app.use('/api', loadSessionUser)
 
   app.get('/', (_req, res) => {
     res.json({
@@ -28,6 +33,9 @@ export async function createApp() {
   })
 
   app.use('/api', healthRoute)
+  app.use('/api', createAuthRouter())
+  app.use('/api', createPolicyRouter())
+  app.use('/api', createFuneralCaseRouter())
 
   const alerts = await createAlertsRuntime()
   if (alerts) {

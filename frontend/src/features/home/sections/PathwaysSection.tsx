@@ -10,9 +10,9 @@ type Pathway = { icon: IconName; title: string; description: string; to: string;
 const featured: Pathway = {
   icon: 'phone',
   title: 'Someone has passed away',
-  description: 'Tell us where you are and what you need. An adviser calls you back, and we take the first steps with you.',
-  to: anchor('quote-form'),
-  cta: 'Get help now',
+  description: 'Report a funeral using an existing policy, or request funeral cover and choose the services your family needs.',
+  to: paths.funeralSupport,
+  cta: 'Start here',
 }
 
 const pathways: Pathway[] = [

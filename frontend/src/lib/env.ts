@@ -2,7 +2,7 @@ const API_MODES = ['mock', 'live'] as const
 type ApiMode = (typeof API_MODES)[number]
 
 function readApiMode(raw: string | undefined): ApiMode {
-  if (raw === undefined || raw === '') return 'mock'
+  if (raw === undefined || raw === '') return 'live'
   if ((API_MODES as readonly string[]).includes(raw)) return raw as ApiMode
   throw new Error(`Invalid VITE_API_MODE "${raw}". Expected one of: ${API_MODES.join(', ')}.`)
 }

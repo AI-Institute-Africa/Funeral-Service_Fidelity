@@ -536,6 +536,13 @@
     gap: var(--space-3);
   }
 
+  .cw-dashboard-charts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+    min-width: 0;
+  }
+
   .cw-stat {
     display: flex;
     align-items: flex-start;
@@ -3837,6 +3844,10 @@
   @media (max-width: 720px) {
     .cw-page {
       gap: var(--space-4);
+    }
+
+    .cw-dashboard-charts {
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .cw-panel,

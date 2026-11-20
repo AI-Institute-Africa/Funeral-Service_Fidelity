@@ -4,30 +4,44 @@ import { Callout } from '@/components/ui/Callout'
 import { Icon } from '@/components/ui/Icon'
 import { StatusChip } from '@/components/ui/StatusChip'
 import { funeralRecordPath, paths } from '@/config/routes'
+import { useAuth } from '@/features/auth'
 import { sendAlerts, type PlanInput } from '@/features/alerts'
 import { normaliseInternationalPhone } from '@/lib/phone'
-import { statusLabels, statusTone, type StreamStatus } from './data'
+import { statusLabels, statusTone, streamViewerForUser, type StreamStatus } from './data'
 import { funeralStreamingStore } from './store'
 import './funeral-streaming.css'
 
 export default function FuneralStreamingDetailPage() {
   const { id = '' } = useParams()
+  const { user } = useAuth()
   const [stream, setStream] = useState(() => funeralStreamingStore.get(id))
   const [msg, setMsg] = useState('')
-  const [invite, setInvite] = useState({ name: '', contact: '' })
+  const [invite, setInvite] = useState({ name: '', contact: '', consentForAlerts: false })
+  const [replayOpened, setReplayOpened] = useState(false)
   if (!stream) return <div className="page-stack"><div className="card empty empty--large"><h1 className="panel__title">Coverage not found</h1><Link className="btn btn--primary" to={paths.accountFuneralStreaming}>Back</Link></div></div>
+  const viewer = user ? streamViewerForUser(stream, user) : undefined
+  const canManage = user?.role === 'admin'
+  if (!canManage && !viewer) {
+    return <div className="page-stack"><div className="card empty empty--large"><h1 className="panel__title">You do not have access to this coverage</h1><p className="muted">Only invited, signed-in viewers can open this funeral coverage. Ask the family administrator for an invitation.</p><Link className="btn btn--primary" to={paths.accountFuneralStreaming}>Back to my coverage</Link></div></div>
+  }
   const flash = (t: string) => { setMsg(t); window.setTimeout(() => setMsg(''), 2500) }
   const notifyLive = () => {
     // Viewers whose contact is a phone number are messaged when the service goes live. Email contacts are skipped.
     const inputs: PlanInput[] = stream.viewers.flatMap((v): PlanInput[] => {
-      const phone = v.status === 'revoked' ? null : normaliseInternationalPhone(v.contact)
+      const phone = v.status === 'revoked' || !v.consentForAlerts ? null : normaliseInternationalPhone(v.contact)
       return phone ? [{ event: 'stream.live', recipient: { phone, consent: true }, payload: { name: v.name, deceased: stream.personName, link: window.location.href }, ref: `${stream.id}:live:${v.id}` }] : []
     })
     void sendAlerts(inputs)
   }
-  const setStatus = (status: StreamStatus) => { if (status === 'live' && stream.status !== 'live') notifyLive(); const n = funeralStreamingStore.setStatus(stream.id, status); if (n) setStream(n); flash(`Status changed to ${statusLabels[status]} (simulation).`) }
-  const addViewer = (e: React.FormEvent) => { e.preventDefault(); if (!invite.name.trim() || !invite.contact.trim()) return; const n = funeralStreamingStore.addViewer(stream.id, invite.name.trim(), invite.contact.trim()); if (n) setStream(n); setInvite({ name: '', contact: '' }); flash('Viewer invitation created (prototype).') }
+  const setStatus = (status: StreamStatus) => { if (!canManage) return; if (status === 'live' && stream.status !== 'live') notifyLive(); const n = funeralStreamingStore.setStatus(stream.id, status); if (n) setStream(n); flash(`Status changed to ${statusLabels[status]} (simulation).`) }
+  const addViewer = (e: React.FormEvent) => { e.preventDefault(); if (!canManage || !invite.name.trim() || !invite.contact.trim()) return; const n = funeralStreamingStore.addViewer(stream.id, invite.name.trim(), invite.contact.trim(), invite.consentForAlerts); if (n) setStream(n); setInvite({ name: '', contact: '', consentForAlerts: false }); flash('Viewer invitation created (prototype).') }
   const saveRecording = () => { const n = funeralStreamingStore.saveRecording(stream.id, stream.savedToArchiveId ?? 'fr-nyathi'); if (n) setStream(n); flash('Recording linked to Digital Funeral Records archive (prototype).') }
+  const openReplay = () => {
+    if (!viewer || !stream.recordingAvailable || stream.status !== 'ended') return
+    const updated = funeralStreamingStore.setViewer(stream.id, viewer.id, 'accessed')
+    if (updated) setStream(updated)
+    setReplayOpened(true)
+  }
 
   return (
     <div className="page-stack fs-grid">
@@ -40,7 +54,7 @@ export default function FuneralStreamingDetailPage() {
       {msg && <Callout tone="success">{msg}</Callout>}
       <div className="callout callout--warning"><Icon name="alert" size={20} /><div><strong>Simulated content.</strong> The player below uses placeholder demonstration footage/controls. No real funeral is being streamed.</div></div>
 
-      <section className="fs-player" aria-label="Simulated funeral coverage player">
+      <section className="fs-player" aria-label="Funeral coverage information">
         <div className="fs-player__badge"><span className="fs-sim">SIMULATED · DEMONSTRATION ONLY</span></div>
         <div className="fs-player__inner">
           <Icon name={stream.status === 'live' ? 'video' : stream.status === 'scheduled' ? 'calendar' : stream.status === 'ended' ? 'check' : 'alert'} size={42} />
@@ -53,9 +67,10 @@ export default function FuneralStreamingDetailPage() {
           <p>{stream.status === 'live' ? 'Placeholder footage would appear here in a real implementation. This prototype demonstrates layout, access controls and status handling only.' : stream.status === 'scheduled' ? `Invited viewers will be able to access this page at ${stream.date} ${stream.time}.` : stream.status === 'ended' ? 'A recorded version can be reviewed by authorised viewers and saved to the funeral records archive.' : 'This event cannot be viewed right now. Please contact the family administrator or funeral coordinator.'}</p>
           <div className="fs-actions" style={{ justifyContent: 'center' }}>
             {stream.status === 'live' && <button type="button" className="btn btn--primary">Pause sample (simulated)</button>}
-            {stream.status === 'ended' && stream.recordingAvailable && <button type="button" className="btn btn--primary">Play recording (simulated)</button>}
+            {stream.status === 'ended' && stream.recordingAvailable && viewer && <button type="button" className="btn btn--primary" onClick={openReplay}>Open recording (sample)</button>}
             {stream.status === 'scheduled' && <Link className="btn btn--outline" to={paths.accountAlerts}>Set up message alerts</Link>}
           </div>
+          {replayOpened && <p role="status">Your access is recorded. Actual video playback is not configured in this demonstration.</p>}
         </div>
       </section>
 
@@ -71,10 +86,10 @@ export default function FuneralStreamingDetailPage() {
             <div><span>Access</span><strong>Invited viewers only (demonstration)</strong></div>
           </div>
           <p>{stream.details}</p>
-          <div className="fs-actions">
+          {canManage && <div className="fs-actions">
             <span className="fs-note">Prototype status controls:</span>
             {(['scheduled', 'live', 'ended', 'unavailable'] as const).map((s) => <button key={s} type="button" className={`btn btn--sm ${stream.status === s ? 'btn--dark' : 'btn--outline'}`} onClick={() => setStatus(s)}>{statusLabels[s]}</button>)}
-          </div>
+          </div>}
         </section>
 
         <aside className="card stack">
@@ -89,7 +104,7 @@ export default function FuneralStreamingDetailPage() {
         </aside>
       </div>
 
-      <section className="card stack">
+      {canManage && <section className="card stack">
         <p className="eyebrow">Invited-viewer access</p>
         <h2 className="panel__title">Viewer invitation and access management</h2>
         <form className="fs-form" onSubmit={addViewer}>
@@ -97,6 +112,7 @@ export default function FuneralStreamingDetailPage() {
             <label className="field"><span className="field__label">Viewer name</span><input className="input" value={invite.name} onChange={(e) => setInvite({ ...invite, name: e.target.value })} required /></label>
             <label className="field"><span className="field__label">Email / phone (sample)</span><input className="input" value={invite.contact} onChange={(e) => setInvite({ ...invite, contact: e.target.value })} required /></label>
           </div>
+          <label className="fs-note"><input type="checkbox" checked={invite.consentForAlerts} onChange={(e) => setInvite({ ...invite, consentForAlerts: e.target.checked })} /> Viewer expressly agrees to receive WhatsApp live-status alerts</label>
           <div className="fs-actions"><button type="submit" className="btn btn--primary btn--sm">Send sample invitation</button></div>
         </form>
         <div className="fs-viewers">
@@ -111,7 +127,7 @@ export default function FuneralStreamingDetailPage() {
             </article>
           ))}
         </div>
-      </section>
+      </section>}
     </div>
   )
 }

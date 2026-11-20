@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma";
 import { logWhatsAppEvent } from "./events";
+import { isWhatsAppSettingEnabled } from "./settingValue";
 
 const SETTING_KEY = "whatsapp_enabled";
 const CACHE_TTL_MS = 5000; // 5 seconds in-memory cache
@@ -22,7 +23,7 @@ export function _resetSettingsCacheForTesting(): void {
 /**
  * Checks if WhatsApp automation is currently enabled.
  * Uses a 5-second in-memory cache to prevent excessive DB lookups on high volume.
- * Defaults to true if the row does not exist.
+ * Defaults to false if the row does not exist or cannot be read.
  */
 export async function isWhatsAppEnabled(): Promise<boolean> {
   const now = Date.now();
@@ -35,13 +36,15 @@ export async function isWhatsAppEnabled(): Promise<boolean> {
       where: { key: SETTING_KEY },
     });
 
-    const isEnabled = setting ? setting.value !== "false" : true;
+    const isEnabled = isWhatsAppSettingEnabled(setting?.value)
     cachedEnabled = isEnabled;
     cacheExpiresAt = now + CACHE_TTL_MS;
     return isEnabled;
   } catch (err) {
-    console.error("[whatsapp/settings] Failed to read setting, defaulting to enabled:", err);
-    return cachedEnabled !== null ? cachedEnabled : true;
+    console.error("[whatsapp/settings] Failed to read setting; WhatsApp sending is disabled until settings are available:", err);
+    cachedEnabled = false;
+    cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+    return false;
   }
 }
 
@@ -54,7 +57,7 @@ export async function getWhatsAppSettings(): Promise<WhatsAppSettingsState> {
       where: { key: SETTING_KEY },
     });
 
-    const enabled = setting ? setting.value !== "false" : true;
+    const enabled = isWhatsAppSettingEnabled(setting?.value)
     cachedEnabled = enabled;
     cacheExpiresAt = Date.now() + CACHE_TTL_MS;
 
@@ -65,11 +68,7 @@ export async function getWhatsAppSettings(): Promise<WhatsAppSettingsState> {
     };
   } catch (err) {
     console.error("[whatsapp/settings] Error fetching settings:", err);
-    return {
-      enabled: cachedEnabled !== null ? cachedEnabled : true,
-      updatedBy: null,
-      updatedAt: null,
-    };
+    throw err
   }
 }
 

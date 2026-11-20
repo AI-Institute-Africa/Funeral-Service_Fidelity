@@ -63,6 +63,10 @@ export const graveRecords: GraveRecord[] = [
 
 export const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
 
+export function googleMapsSearchUrl(query: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query.trim())}`
+}
+
 export function searchCemeteries(query: string, publishedOnly: boolean): Cemetery[] {
   const q = norm(query)
   return cemeteries.filter((c) => {

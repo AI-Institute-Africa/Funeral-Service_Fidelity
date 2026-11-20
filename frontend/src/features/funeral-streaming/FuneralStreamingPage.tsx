@@ -2,19 +2,24 @@ import { Link } from 'react-router-dom'
 import { Icon } from '@/components/ui/Icon'
 import { StatusChip } from '@/components/ui/StatusChip'
 import { funeralRecordPath, funeralStreamingPath, paths } from '@/config/routes'
-import { statusLabels, statusTone } from './data'
+import { useAuth } from '@/features/auth'
+import { statusLabels, statusTone, streamViewerForUser } from './data'
 import { funeralStreamingStore } from './store'
 import './funeral-streaming.css'
 
 export default function FuneralStreamingPage() {
-  const streams = funeralStreamingStore.list()
+  const { user } = useAuth()
+  const allStreams = funeralStreamingStore.list()
+  const streams = user?.role === 'admin'
+    ? allStreams
+    : allStreams.filter((stream) => Boolean(user && streamViewerForUser(stream, user)))
   return (
     <div className="page-stack fs-grid">
       <header className="page-head page-head--row reveal">
         <div>
           <p className="eyebrow">Live Funeral Coverage</p>
-          <h1>Scheduled and simulated funeral streaming</h1>
-          <p className="muted" style={{ maxWidth: '72ch' }}>Manage invited access to scheduled funeral coverage, view simulated live or recorded playback, and connect completed recordings to the Digital Funeral Records archive.</p>
+          <h1>Funeral coverage and replays</h1>
+          <p className="muted" style={{ maxWidth: '72ch' }}>Signed-in invitees can return to their coverage record at any time. Administrators can manage sample invitations and link completed recordings to the Digital Funeral Records archive.</p>
         </div>
         <Link className="btn btn--outline" to={paths.accountFuneralRecords}><Icon name="archive" size={18} /> Funeral records</Link>
       </header>
@@ -39,6 +44,7 @@ export default function FuneralStreamingPage() {
             </div>
           </article>
         ))}
+        {streams.length === 0 && <div className="card empty"><h2 className="panel__title">No coverage invitations</h2><p className="muted">Coverage records appear here after the family administrator invites your signed-in phone number or email address.</p></div>}
       </div>
     </div>
   )

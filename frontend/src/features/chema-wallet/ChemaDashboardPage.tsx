@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Callout } from '@/components/ui/Callout'
+import { DonutChart, LineChart } from '@/components/ui/DashboardCharts'
 import { Icon } from '@/components/ui/Icon'
 import { StatusChip } from '@/components/ui/StatusChip'
 import { chemaCasePath, contributePath, paths } from '@/config/routes'
@@ -26,6 +27,7 @@ import { demoPersonas } from '@/features/auth/demo'
 import './chema-wallet.css'
 
 type CaseFilter = 'all' | 'active' | 'review' | 'attention'
+const CHART_REFERENCE_TIME = Date.now()
 
 const filterLabels: Record<CaseFilter, string> = {
   all: 'All cases',
@@ -60,6 +62,25 @@ export default function ChemaDashboardPage() {
 
   const metrics = dashboardMetrics(state)
   const cases = state.cases
+  const contributionTrend = useMemo(() => {
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(CHART_REFERENCE_TIME - (6 - index) * 86_400_000)
+      const key = date.toISOString().slice(0, 10)
+      const amount = state.contributions
+        .filter((item) => item.status === 'successful' && item.createdAt.slice(0, 10) === key)
+        .reduce((sum, item) => sum + item.amount, 0)
+      return {
+        label: new Intl.DateTimeFormat('en', { weekday: 'short', timeZone: 'UTC' }).format(date),
+        value: Math.round(amount * 100) / 100,
+      }
+    })
+  }, [state.contributions])
+  const casePortfolio = [
+    { label: 'Verified', value: cases.filter((item) => item.status === 'verified').length },
+    { label: 'In review', value: cases.filter((item) => ['submitted', 'under_review', 'returned'].includes(item.status)).length },
+    { label: 'Draft', value: cases.filter((item) => item.status === 'draft').length },
+    { label: 'Other states', value: cases.filter((item) => !['verified', 'submitted', 'under_review', 'returned', 'draft'].includes(item.status)).length },
+  ].filter((item) => item.value > 0)
   const totalAvailable = useMemo(
     () => cases.filter((item) => item.status === 'verified').reduce((sum, item) => sum + availableCommunityBalance(state, item.id), 0),
     [cases, state],
@@ -146,6 +167,11 @@ export default function ChemaDashboardPage() {
         <StatTile icon="users" label="Contributors" value={metrics.contributors} hint={`${metrics.settledContributions} confirmed digital contributions`} />
         <StatTile icon="clock" label="Awaiting approval" value={metrics.awaitingApproval} hint="Payouts needing an independent approver" />
         <StatTile icon="alert" label="Open disputes" value={metrics.openDisputes} hint={metrics.openDisputes > 0 ? 'Open disputes or public reports under review' : 'No open disputes or reports'} />
+      </section>
+
+      <section className="cw-dashboard-charts" aria-label="Chema Wallet analytics">
+        <LineChart title="Confirmed contributions" subtitle="Contribution value by day · past 7 days" data={contributionTrend} formatValue={money} />
+        <DonutChart title="Case portfolio" subtitle={`${cases.length} cases by verification state`} data={casePortfolio} />
       </section>
 
       <div className="cw-layout">

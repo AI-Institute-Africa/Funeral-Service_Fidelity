@@ -21,6 +21,10 @@ const PortalCustomersPage = lazy(() => import('@/features/admin/CustomersPage'))
 const PortalProvidersPage = lazy(() => import('@/features/admin/ProvidersPage'))
 const PortalMessagingPage = lazy(() => import('@/features/alerts/MessagingPage'))
 const PortalActivityPage = lazy(() => import('@/features/admin/ActivityPage'))
+const PortalOperationsPage = lazy(() => import('@/features/operations/OperationsPage'))
+const PortalPolicyImportPage = lazy(() => import('@/features/operations/PolicyImportPage'))
+const PortalFuneralCasesPage = lazy(() => import('@/features/operations/AdminCasesPage'))
+const AccountFuneralCasesPage = lazy(() => import('@/features/operations/FuneralCasesPage'))
 const LoginPage = lazy(() => import('@/features/account/LoginPage'))
 const SignupPage = lazy(() => import('@/features/account/SignupPage'))
 const DashboardPage = lazy(() => import('@/features/account/DashboardPage'))
@@ -47,6 +51,7 @@ const AftercarePage = lazy(() => import('@/features/aftercare/AftercarePage'))
 const ProcessionPage = lazy(() => import('@/features/procession/ProcessionPage'))
 const AssistantPage = lazy(() => import('@/features/assistant/AssistantPage'))
 const AboutPage = lazy(() => import('@/features/about/AboutPage'))
+const FuneralIntakePage = lazy(() => import('@/features/operations/IntakePage'))
 const MarketplacePage = lazy(() => import('@/features/marketplace/MarketplacePage'))
 const ProductPage = lazy(() => import('@/features/marketplace/ProductPage'))
 const CheckoutPage = lazy(() => import('@/features/marketplace/CheckoutPage'))
@@ -67,6 +72,7 @@ export function App() {
                 <Route path={`${paths.memorials}/:slug`} element={<MemorialPage />} />
                 <Route path={`${paths.contribute}/:token`} element={<ContributePage />} />
                 <Route path={paths.about} element={<AboutPage />} />
+                <Route path={paths.funeralSupport} element={<FuneralIntakePage />} />
                 <Route path={paths.cemeteries} element={<CemeteriesPage />} />
                 <Route path={paths.assistant} element={<AssistantPage />} />
                 <Route path={paths.marketplace} element={<MarketplacePage />} />
@@ -87,6 +93,7 @@ export function App() {
                   <Route path={paths.account} element={<DashboardPage />} />
                   <Route path={paths.accountPolicy} element={<PolicyPage />} />
                   <Route path={paths.accountRequests} element={<RequestsPage />} />
+                  <Route path={paths.accountFuneralCases} element={<AccountFuneralCasesPage />} />
                   <Route path={paths.accountFamilyHistory} element={<FamilyHistoryPage />} />
                   <Route path={paths.accountMemorials} element={<MemorialsPage />} />
                   <Route path={`${paths.accountMemorials}/:id`} element={<MemorialEditorPage />} />
@@ -118,6 +125,9 @@ export function App() {
                     <Route path={paths.portalProviders} element={<PortalProvidersPage />} />
                     <Route path={paths.portalActivity} element={<PortalActivityPage />} />
                     <Route path={paths.portalMessaging} element={<PortalMessagingPage />} />
+                    <Route path={paths.portalOperations} element={<PortalOperationsPage />} />
+                    <Route path={paths.portalPolicyImport} element={<PortalPolicyImportPage />} />
+                    <Route path={paths.portalFuneralCases} element={<PortalFuneralCasesPage />} />
                   </Route>
                 </Route>
               </Route>

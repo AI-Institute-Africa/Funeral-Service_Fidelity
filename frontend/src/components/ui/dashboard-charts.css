@@ -1,0 +1,117 @@
+@layer components {
+  :root {
+    --dashboard-chart-1: var(--color-accent-strong);
+    --dashboard-chart-2: var(--color-highlight-strong);
+    --dashboard-chart-3: var(--color-success);
+    --dashboard-chart-4: var(--color-warning);
+    --dashboard-chart-5: var(--color-danger);
+    --dashboard-chart-6: var(--color-text-muted);
+  }
+
+  .dashboard-chart {
+    min-width: 0;
+    margin: 0;
+    padding: var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .dashboard-chart__caption {
+    display: grid;
+    gap: 3px;
+    margin-bottom: var(--space-3);
+  }
+
+  .dashboard-chart__caption strong {
+    color: var(--color-heading);
+    font-size: var(--text-md);
+  }
+
+  .dashboard-chart__caption span,
+  .dashboard-chart__empty {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .dashboard-chart__donut-layout {
+    display: grid;
+    grid-template-columns: minmax(112px, 0.8fr) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .dashboard-chart__donut {
+    display: block;
+    width: 100%;
+    max-width: 180px;
+    margin-inline: auto;
+    overflow: visible;
+  }
+
+  .dashboard-chart__donut-track,
+  .dashboard-chart__donut-segment {
+    fill: none;
+    stroke-width: 13;
+  }
+
+  .dashboard-chart__donut-track { stroke: var(--color-bg-soft); }
+  .dashboard-chart__donut-segment { transform: rotate(-90deg); transform-origin: 50% 50%; }
+  .dashboard-chart__total { fill: var(--color-heading); font-family: var(--font-serif); font-size: 19px; font-weight: 700; }
+  .dashboard-chart__total-label { fill: var(--color-text-muted); font-family: var(--font-sans); font-size: 7px; }
+
+  .dashboard-chart__legend,
+  .dashboard-chart__bars {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .dashboard-chart__legend li {
+    display: grid;
+    grid-template-columns: 9px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+  }
+
+  .dashboard-chart__swatch { width: 9px; height: 9px; border-radius: 50%; }
+  .dashboard-chart__legend-label { min-width: 0; color: var(--color-text-muted); }
+  .dashboard-chart__legend strong,
+  .dashboard-chart__bars strong { color: var(--color-heading); font-variant-numeric: tabular-nums; }
+
+  .dashboard-chart__bars li {
+    display: grid;
+    grid-template-columns: minmax(85px, 0.85fr) minmax(70px, 1.5fr) auto;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .dashboard-chart__bar-label { overflow-wrap: anywhere; color: var(--color-text-muted); }
+  .dashboard-chart__bar-track { display: block; height: 10px; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-bg-soft); }
+  .dashboard-chart__bar-fill { display: block; height: 100%; min-width: 0; border-radius: inherit; transition: width 500ms ease; }
+
+  .dashboard-chart__line {
+    display: block;
+    width: 100%;
+    min-height: 130px;
+    overflow: visible;
+  }
+
+  .dashboard-chart__gridline { stroke: var(--color-border); stroke-dasharray: 3 5; stroke-width: 1; }
+  .dashboard-chart__area { fill: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+  .dashboard-chart__line-path { fill: none; stroke: var(--color-accent-strong); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; }
+  .dashboard-chart__point { fill: var(--color-surface); stroke: var(--color-accent-strong); stroke-width: 3; }
+  .dashboard-chart__axis-label { fill: var(--color-text-muted); font-family: var(--font-sans); font-size: 9px; }
+
+  @media (max-width: 520px) {
+    .dashboard-chart__donut-layout { grid-template-columns: minmax(90px, 0.7fr) minmax(0, 1fr); gap: var(--space-2); }
+    .dashboard-chart__legend li { gap: 6px; font-size: 0.76rem; }
+    .dashboard-chart__bars li { grid-template-columns: minmax(72px, 0.9fr) minmax(50px, 1.2fr) auto; gap: 8px; font-size: 0.8rem; }
+  }
+}

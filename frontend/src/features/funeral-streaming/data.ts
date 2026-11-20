@@ -1,3 +1,5 @@
+import { normaliseInternationalPhone } from '../../lib/phone'
+
 export type StreamStatus = 'scheduled' | 'live' | 'ended' | 'unavailable'
 export type ViewerStatus = 'invited' | 'accessed' | 'revoked'
 
@@ -8,6 +10,7 @@ export type StreamViewer = {
   status: ViewerStatus
   invitedAt: string
   accessedAt?: string
+  consentForAlerts?: boolean
 }
 
 export type FuneralStream = {
@@ -40,3 +43,17 @@ export const statusTone: Record<StreamStatus, 'neutral' | 'danger' | 'success' |
 }
 
 export const nextId = (p: string) => `${p}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+
+export function streamViewerForUser(
+  stream: FuneralStream,
+  user: { phone: string; email?: string },
+): StreamViewer | undefined {
+  const phone = normaliseInternationalPhone(user.phone)
+  const email = user.email?.trim().toLowerCase()
+  return stream.viewers.find((viewer) => {
+    if (viewer.status === 'revoked') return false
+    const viewerPhone = normaliseInternationalPhone(viewer.contact)
+    if (phone && viewerPhone === phone) return true
+    return Boolean(email && viewer.contact.trim().toLowerCase() === email)
+  })
+}

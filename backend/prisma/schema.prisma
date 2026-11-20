@@ -81,10 +81,55 @@ enum AuditActionType {
   SYSTEM
 }
 
+enum PolicyRecordStatus {
+  ACTIVE
+  GRACE
+  LAPSED
+}
+
+enum FuneralCaseType {
+  POLICY_COVERED
+  WALK_IN_COVERAGE
+}
+
+enum FuneralCaseStatus {
+  NEW
+  UNDER_REVIEW
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum CoverageReviewStatus {
+  NOT_APPLICABLE
+  PENDING
+  ACTIVE
+  GRACE
+  LAPSED
+  NOT_COVERED
+}
+
+enum WhatsAppCaseGroupStatus {
+  NOT_REQUESTED
+  PENDING
+  CREATING
+  ACTIVE
+  FAILED
+  CLOSED
+}
+
+enum WhatsAppCaseParticipantType {
+  REPORTER
+  STAFF
+  RELATIVE
+}
+
 model User {
   id                String    @id @default(uuid()) @db.Uuid
-  email             String    @unique
-  passwordHash      String    @map("password_hash")
+  phoneNumber       String?   @unique @map("phone_number")
+  email             String?   @unique
+  passwordHash      String?   @map("password_hash")
   role              UserRole
   isActive          Boolean   @default(true) @map("is_active")
   emailVerifiedAt   DateTime? @map("email_verified_at")
@@ -95,6 +140,10 @@ model User {
   customerProfile   CustomerProfile?
   adminProfile      Admin?
   auditLogsAsUser   AuditLog[] @relation("AuditLogActorUser")
+  policyImportBatches PolicyImportBatch[]
+  funeralCasesCreated FuneralCase[] @relation("FuneralCaseReporter")
+  funeralCasesAssigned FuneralCase[] @relation("FuneralCaseAssignee")
+  whatsappParticipantsAdded WhatsAppCaseParticipant[] @relation("WhatsAppParticipantAddedBy")
 
   @@map("users")
 }
@@ -112,6 +161,7 @@ model CustomerProfile {
   province             String?
   country              String?
   dateOfBirth          DateTime?                 @map("date_of_birth")
+  preferredLanguage   String                    @default("en") @map("preferred_language")
   createdAt            DateTime                  @default(now()) @map("created_at")
   updatedAt            DateTime                  @updatedAt @map("updated_at")
 
@@ -570,4 +620,159 @@ model AppSetting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
+}
+
+/// Short-lived, one-use mobile OTP challenge. Only a keyed hash of the code is stored.
+model OtpChallenge {
+  id         String   @id @default(uuid()) @db.Uuid
+  phone      String
+  purpose    String
+  codeHash   String   @map("code_hash")
+  attempts   Int      @default(0)
+  expiresAt  DateTime @map("expires_at")
+  lastSentAt DateTime @default(now()) @map("last_sent_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([phone, purpose])
+  @@index([expiresAt])
+  @@map("otp_challenges")
+}
+
+/// Current policy data imported by Fidelity administrators from a validated workbook.
+model PolicyRecord {
+  policyNumber         String             @id @map("policy_number")
+  holderName           String             @map("holder_name")
+  phoneNumber          String             @map("phone_number")
+  status               PolicyRecordStatus
+  planName             String             @map("plan_name")
+  coverAmount          Decimal            @map("cover_amount") @db.Decimal(12, 2)
+  monthlyPremium       Decimal            @map("monthly_premium") @db.Decimal(12, 2)
+  startDate            DateTime           @map("start_date") @db.Date
+  monthsPaid           Int                @map("months_paid")
+  waitingPeriodMonths  Int                @map("waiting_period_months")
+  sourceBatchId        String             @map("source_batch_id") @db.Uuid
+  importedAt           DateTime           @default(now()) @map("imported_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  sourceBatch          PolicyImportBatch  @relation(fields: [sourceBatchId], references: [id], onDelete: Restrict)
+  members              PolicyCoveredMember[]
+  funeralCases         FuneralCase[]
+
+  @@index([phoneNumber])
+  @@map("policy_records")
+}
+
+/// Server-authoritative intake and case coordination record.
+model FuneralCase {
+  id                    String               @id @default(uuid()) @db.Uuid
+  reference             String               @unique
+  caseType              FuneralCaseType      @map("case_type")
+  status                FuneralCaseStatus    @default(NEW)
+  reporterUserId        String               @map("reporter_user_id") @db.Uuid
+  reporterName          String               @map("reporter_name")
+  contactPhone          String               @map("contact_phone")
+  deceasedName          String?              @map("deceased_name")
+  dateOfDeath           DateTime?            @map("date_of_death") @db.Date
+  serviceLocation       String?              @map("service_location")
+  funeralAt             DateTime?            @map("funeral_at")
+  funeralLocation       String?              @map("funeral_location")
+  requestedPlan         String?              @map("requested_plan")
+  applicationChannel    String?              @map("application_channel")
+  applicationLocation  String?              @map("application_location")
+  requestedServices     String[]             @default([]) @map("requested_services")
+  policyNumber          String?              @map("policy_number")
+  coverageReviewStatus  CoverageReviewStatus @default(NOT_APPLICABLE) @map("coverage_review_status")
+  assignedStaffUserId   String?              @map("assigned_staff_user_id") @db.Uuid
+  whatsappConsentAt     DateTime?            @map("whatsapp_consent_at")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+
+  reporter              User                 @relation("FuneralCaseReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+  assignedStaff         User?                @relation("FuneralCaseAssignee", fields: [assignedStaffUserId], references: [id], onDelete: SetNull)
+  policy                PolicyRecord?        @relation(fields: [policyNumber], references: [policyNumber], onDelete: Restrict)
+  whatsappGroup         WhatsAppCaseGroup?
+  whatsappParticipants  WhatsAppCaseParticipant[]
+
+  @@index([reporterUserId, createdAt])
+  @@index([status, createdAt])
+  @@index([assignedStaffUserId, status])
+  @@map("funeral_cases")
+}
+
+model WhatsAppCaseGroup {
+  id          String                  @id @default(uuid()) @db.Uuid
+  caseId      String                  @unique @map("case_id") @db.Uuid
+  status      WhatsAppCaseGroupStatus @default(PENDING)
+  groupJid    String?                 @unique @map("group_jid")
+  groupName   String                  @map("group_name")
+  error       String?
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+
+  funeralCase FuneralCase              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  participants WhatsAppCaseParticipant[]
+
+  @@index([status, updatedAt])
+  @@map("whatsapp_case_groups")
+}
+
+model WhatsAppCaseParticipant {
+  id                 String                       @id @default(uuid()) @db.Uuid
+  caseId             String                       @map("case_id") @db.Uuid
+  groupId            String?                      @map("group_id") @db.Uuid
+  phoneNumber        String                       @map("phone_number")
+  displayName        String                       @map("display_name")
+  relationship       String?
+  participantType    WhatsAppCaseParticipantType  @map("participant_type")
+  consentAt          DateTime?                    @map("consent_at")
+  addedAt            DateTime?                    @map("added_at")
+  removedAt          DateTime?                    @map("removed_at")
+  addedByUserId      String?                      @map("added_by_user_id") @db.Uuid
+  createdAt          DateTime                     @default(now()) @map("created_at")
+  updatedAt          DateTime                     @updatedAt @map("updated_at")
+
+  funeralCase        FuneralCase                  @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  group              WhatsAppCaseGroup?           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  addedBy            User?                        @relation("WhatsAppParticipantAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([caseId, phoneNumber])
+  @@index([groupId])
+  @@index([caseId, participantType])
+  @@map("whatsapp_case_participants")
+}
+
+model PolicyCoveredMember {
+  id              String       @id @default(uuid()) @db.Uuid
+  policyNumber    String       @map("policy_number")
+  name            String
+  relationship    String
+  share           Decimal?     @db.Decimal(5, 2)
+
+  policy          PolicyRecord @relation(fields: [policyNumber], references: [policyNumber], onDelete: Cascade)
+
+  @@unique([policyNumber, name])
+  @@map("policy_covered_members")
+}
+
+/// Staged preview payload; applying a batch is a separate, audited action.
+model PolicyImportBatch {
+  id                String         @id @default(uuid()) @db.Uuid
+  uploadedByUserId  String         @map("uploaded_by_user_id") @db.Uuid
+  fileName          String         @map("file_name")
+  layout            String
+  rowsRead          Int            @map("rows_read")
+  policiesAdded     Int            @map("policies_added")
+  policiesUpdated   Int            @map("policies_updated")
+  payload           Json
+  status            String         @default("PREVIEW")
+  expiresAt         DateTime       @map("expires_at")
+  committedAt       DateTime?      @map("committed_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+
+  uploadedBy        User           @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  policies          PolicyRecord[]
+
+  @@index([uploadedByUserId, createdAt])
+  @@index([status, expiresAt])
+  @@map("policy_import_batches")
 }

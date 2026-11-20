@@ -1,0 +1,29 @@
+@layer features {
+  .cases-page { padding-block: clamp(36px, 6vw, 76px); }
+  .cases { display: grid; width: min(100%, 1000px); gap: var(--space-5); margin-inline: auto; }
+  .cases__list { display: grid; gap: var(--space-4); }
+  .cases__card { display: grid; gap: var(--space-3); padding: var(--space-5); }
+  .cases__card > p { margin: 0; }
+  .cases__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+  .cases__heading h2 { margin: 0; font-family: var(--font-serif); }
+  .cases__heading .eyebrow { margin-bottom: 4px; }
+  .cases__status { padding: 5px 10px; border-radius: var(--radius-pill); background: var(--color-hover-tint); color: var(--color-heading); text-transform: capitalize; }
+  .cases__group { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+  .cases__group h3,
+  .cases__invite h4 { margin: 0; color: var(--color-heading); }
+  .cases__group > p { margin: 0; }
+  .cases__invite { display: grid; gap: var(--space-3); margin-top: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+  .cases__consent { display: flex; align-items: flex-start; gap: var(--space-2); }
+  .cases__consent input { margin-top: 5px; accent-color: var(--color-accent); }
+  .cases__assignment { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+  .cases__group-status { display: grid; gap: var(--space-2); }
+  .cases__group-status > span { overflow-wrap: anywhere; }
+  .cases__error { margin: 0; color: var(--color-danger); font-weight: 600; }
+  .cases__notice { padding: var(--space-3) var(--space-4); border: 1px solid var(--color-accent-border); border-radius: var(--radius-sm); background: var(--color-accent-tint); }
+  .cases__empty { padding: var(--space-5); }
+  .cases__empty h2 { margin-top: 0; }
+  @media (max-width: 640px) {
+    .cases__card { padding: var(--space-4); }
+    .cases__assignment { grid-template-columns: 1fr; }
+  }
+}

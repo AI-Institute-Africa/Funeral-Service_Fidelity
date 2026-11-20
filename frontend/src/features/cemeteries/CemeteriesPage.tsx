@@ -4,7 +4,7 @@ import { Section } from '@/components/ui/Section'
 import { SectionHead } from '@/components/ui/SectionHead'
 import { StatusChip } from '@/components/ui/StatusChip'
 import { TextField } from '@/components/ui/TextField'
-import { availabilityLabels, cemeteries, priceRange, searchCemeteries, searchGraves, type Cemetery, type GraveRecord, type PlotEnquiry } from './data'
+import { availabilityLabels, cemeteries, googleMapsSearchUrl, priceRange, searchCemeteries, searchGraves, type Cemetery, type GraveRecord, type PlotEnquiry } from './data'
 import { plotEnquiryStore } from './store'
 import './cemeteries.css'
 
@@ -75,6 +75,7 @@ function CemeteryCard({ c }: { c: Cemetery }) {
         <div><span>Email</span><strong>{c.email}</strong></div>
       </div>
       <p className="muted"><strong>Directions.</strong> {c.directions}</p>
+      <p><a className="btn btn--outline btn--sm" href={googleMapsSearchUrl(`${c.name}, ${c.town}, ${c.region}`)} target="_blank" rel="noreferrer">Open cemetery in Google Maps</a></p>
       {open ? <EnquiryForm cemetery={c} onDone={() => setOpen(false)} /> : (
         <div className="cem-actions"><button className="btn btn--primary btn--sm" type="button" onClick={() => setOpen(true)}>Plot enquiry</button></div>
       )}
@@ -91,7 +92,9 @@ function GraveResult({ g }: { g: GraveRecord }) {
         <StatusChip tone={g.verified ? 'success' : 'warning'}>{g.verified ? 'Verified record' : 'Awaiting operator verification'}</StatusChip>
       </div>
       <p className="muted">{c?.name}, {c?.town}. Section {g.section}, plot {g.plot}.</p>
+      {c && <p><a className="btn btn--outline btn--sm" href={googleMapsSearchUrl(`${c.name}, ${c.town}, ${c.region}`)} target="_blank" rel="noreferrer">Open cemetery in Google Maps</a></p>}
       {!g.verified && <p className="muted">The cemetery operator has not verified this record, so please confirm it with them before visiting.</p>}
+      {g.verified && <p className="muted">The map opens the cemetery only; it does not identify this individual plot or provide verified grave coordinates.</p>}
     </li>
   )
 }

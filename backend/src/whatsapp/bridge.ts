@@ -16,6 +16,7 @@ import { env } from '../config/env'
 import { stopBoss } from '../lib/jobs/boss'
 import {
   getBridgeHealth, getConnectionStatus, reconnectSession, recoverSession, registerQueueWorker, shutdown, startSession, stopSession,
+  syncCaseWhatsAppGroup,
 } from './manager'
 
 const { bridgeSecret: SECRET, bridgePort: PORT } = env.alerts.whatsapp
@@ -64,6 +65,14 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req)
       await stopSession(body.purge !== false)
       return sendJson(res, 200, { stopped: true })
+    }
+    if (req.method === 'POST' && path === '/groups/sync') {
+      const body = await readBody(req)
+      if (typeof body.caseId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.caseId)) {
+        return sendJson(res, 400, { error: 'A valid case id is required' })
+      }
+      const result = await syncCaseWhatsAppGroup(body.caseId)
+      return sendJson(res, 200, result)
     }
     return sendJson(res, 404, { error: 'Not found' })
   } catch (err) {

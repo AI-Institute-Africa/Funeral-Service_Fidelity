@@ -5,6 +5,7 @@ import { cancelReconnect, hasPendingReconnect, scheduleReconnect } from './pendi
 import { cleanWhatsAppJid, isWhatsAppUserJid, normalizePhoneInput, phoneToWhatsAppJid, whatsappJidToPhone } from './phone'
 import { BASE_DELAY_MS, markOpen, MAX_DELAY_MS, nextBackoff, resetBackoff, STABLE_AFTER_MS } from './reconnectBackoff'
 import { summarizeWhatsAppSockets } from './health'
+import { requireSuccessfulParticipantUpdate } from './participantUpdate'
 
 describe('phone', () => {
   it('normalises input and builds and parses JIDs', () => {
@@ -13,6 +14,22 @@ describe('phone', () => {
     assert.equal(phoneToWhatsAppJid('+263771234567'), '263771234567@s.whatsapp.net')
     assert.equal(cleanWhatsAppJid('263771234567:12@S.whatsapp.net'), '263771234567@s.whatsapp.net')
     assert.equal(whatsappJidToPhone('263771234567:12@s.whatsapp.net'), '+263771234567')
+  })
+
+  describe('WhatsApp group participant updates', () => {
+    it('only treats an explicit success response as an added or removed participant', () => {
+      assert.doesNotThrow(() => requireSuccessfulParticipantUpdate(
+        [{ status: '200', jid: '263771234567@s.whatsapp.net' }],
+        '+263771234567',
+        'add',
+      ))
+      assert.throws(() => requireSuccessfulParticipantUpdate(
+        [{ status: '403', jid: '263771234567@s.whatsapp.net' }],
+        '+263771234567',
+        'add',
+      ), /could not add/)
+      assert.throws(() => requireSuccessfulParticipantUpdate([], '+263771234567', 'remove'), /could not remove/)
+    })
   })
 
   it('accepts only individual chats', () => {

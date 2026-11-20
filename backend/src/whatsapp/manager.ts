@@ -31,6 +31,7 @@ import { cancelAllReconnects, cancelReconnect, scheduleReconnect } from './pendi
 import { cleanWhatsAppJid, isWhatsAppUserJid, phoneToWhatsAppJid, whatsappJidToPhone } from './phone'
 import { markOpen, nextBackoff, resetBackoff } from './reconnectBackoff'
 import { isWhatsAppEnabled } from './settings'
+import { requireSuccessfulParticipantUpdate } from './participantUpdate'
 
 /** The one paired session. */
 export const SESSION_KEY = 'company'
@@ -154,6 +155,9 @@ export async function startSession(options: { mode: 'qr' | 'pairing'; phone?: st
         pairingExpiresAt: null, connectedAt: new Date(), lastActiveAt: new Date(), errorMessage: null,
       })
       await logWhatsAppEvent({ type: 'SESSION', status: 'CONNECTED', phone: phone || null, jid, details: 'WhatsApp session established' })
+      void retryPendingCaseWhatsAppGroups().catch((error: unknown) => {
+        console.error('[whatsapp/manager] Could not recover pending case groups:', error)
+      })
     }
 
     if (connection === 'close') {
@@ -279,6 +283,212 @@ export async function getConnectionStatus() {
   }
 }
 
+/**
+ * Create the case's private coordination group once, then add any consented relatives and
+ * assigned Fidelity staff who are not already members. The database claim prevents concurrent
+ * API retries from creating duplicate groups for the same case.
+ */
+export async function syncCaseWhatsAppGroup(caseId: string): Promise<{ status: string; groupJid: string | null }> {
+  const record = await prisma.whatsAppCaseGroup.findUnique({
+    where: { caseId },
+    include: {
+      funeralCase: true,
+      participants: true,
+    },
+  })
+  if (!record) throw new Error('WhatsApp group record was not found for this case.')
+  if (record.status === 'NOT_REQUESTED' || !record.funeralCase.whatsappConsentAt) {
+    throw new Error('The case reporter has not consented to WhatsApp group coordination.')
+  }
+  if (record.status === 'CLOSED') throw new Error('The WhatsApp group for this case is closed.')
+  if (!env.alerts.enabled || !(await isWhatsAppEnabled())) throw new Error('WhatsApp sending is disabled by Fidelity.')
+  const sock = session?.sock
+  if (!sock || !sock.ws.isOpen) throw new Error('The Fidelity WhatsApp gateway is not connected.')
+
+  if (record.status !== 'ACTIVE') {
+    const claimed = await prisma.whatsAppCaseGroup.updateMany({
+      where: {
+        id: record.id,
+        OR: [
+          { status: { in: ['PENDING', 'FAILED'] } },
+          { status: 'CREATING', updatedAt: { lt: new Date(Date.now() - 5 * 60_000) } },
+        ],
+      },
+      data: { status: 'CREATING', error: null },
+    })
+    if (claimed.count !== 1) {
+      const current = await prisma.whatsAppCaseGroup.findUnique({ where: { id: record.id } })
+      if (current?.status === 'ACTIVE' && current.groupJid) {
+        return syncActiveCaseGroup(record.id, current.groupJid, record.participants, sock)
+      }
+      if (current?.status === 'CREATING') return { status: 'CREATING', groupJid: null }
+      throw new Error('The WhatsApp group is not ready to be created. Refresh the case and retry.')
+    }
+
+    try {
+      const participants = record.participants.filter((participant) =>
+        !participant.removedAt && (participant.participantType === 'STAFF' || participant.consentAt !== null),
+      )
+      const reporter = participants.find((participant) => participant.participantType === 'REPORTER')
+      if (!reporter) throw new Error('The reporter’s consented WhatsApp number is missing.')
+      const jids = await resolveGroupParticipants(sock, participants)
+      const currentGroups = await sock.groupFetchAllParticipating()
+      const recovered = Object.values(currentGroups).find((group) => group.subject === record.groupName)
+      const created = recovered ?? await sock.groupCreate(record.groupName, jids)
+      if (!created.id) throw new Error('WhatsApp did not return a group identifier.')
+
+      await prisma.whatsAppCaseGroup.update({
+        where: { id: record.id },
+        data: { status: 'ACTIVE', groupJid: created.id, error: null },
+      })
+      await prisma.whatsAppCaseParticipant.updateMany({
+        where: { id: { in: participants.map((participant) => participant.id) } },
+        data: { groupId: record.id },
+      })
+      const saved = await prisma.whatsAppCaseGroup.findUniqueOrThrow({
+        where: { id: record.id },
+        include: { participants: true },
+      })
+      await syncActiveCaseGroup(record.id, created.id, saved.participants, sock)
+      await sock.sendMessage(created.id, {
+        text: `Fidelity Life funeral coordination for ${record.funeralCase.reference}. Please keep case-related coordination in this group. Contact Fidelity staff if you need urgent assistance.`,
+      })
+      await logWhatsAppEvent({
+        type: 'OUTBOUND',
+        status: 'GROUP_CREATED',
+        jid: created.id,
+        details: `Created private coordination group for case ${record.funeralCase.reference}`,
+        metadata: { caseId, participantCount: participants.length },
+      })
+      return { status: 'ACTIVE', groupJid: created.id }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await prisma.whatsAppCaseGroup.update({
+        where: { id: record.id },
+        data: { status: 'FAILED', error: message.slice(0, 500) },
+      })
+      await logWhatsAppEvent({
+        type: 'OUTBOUND',
+        status: 'FAILED',
+        details: `Could not create group for case ${record.funeralCase.reference}: ${message}`,
+        metadata: { caseId },
+      })
+      throw error
+    }
+  }
+
+  if (!record.groupJid) throw new Error('The WhatsApp group is marked active but has no group identifier.')
+  return syncActiveCaseGroup(record.id, record.groupJid, record.participants, sock)
+}
+
+async function resolveGroupParticipants(
+  sock: WASocket,
+  participants: { phoneNumber: string; displayName: string; participantType: string }[],
+): Promise<string[]> {
+  const jids: string[] = []
+  for (const participant of participants) {
+    const jid = phoneToWhatsAppJid(participant.phoneNumber)
+    const matches = await sock.onWhatsApp(jid)
+    if (!matches?.some((match) => match.exists)) {
+      throw new Error(`The WhatsApp number for ${participant.displayName} is not available on WhatsApp.`)
+    }
+    jids.push(jid)
+  }
+  return [...new Set(jids)]
+}
+
+async function syncActiveCaseGroup(
+  groupId: string,
+  groupJid: string,
+  participants: { id: string; phoneNumber: string; displayName: string; participantType: string; consentAt: Date | null; addedAt: Date | null; removedAt: Date | null }[],
+  sock: WASocket,
+): Promise<{ status: string; groupJid: string | null }> {
+  try {
+    const pending = participants.filter((participant) =>
+      !participant.removedAt && !participant.addedAt && (participant.participantType === 'STAFF' || participant.consentAt !== null),
+    )
+    const removed = participants.filter((participant) => participant.removedAt && participant.addedAt)
+    if (!pending.length && !removed.length) {
+      await prisma.whatsAppCaseGroup.update({ where: { id: groupId }, data: { error: null } })
+      return { status: 'ACTIVE', groupJid }
+    }
+    const metadata = await sock.groupMetadata(groupJid)
+    const existing = new Set(metadata.participants.map((participant) => cleanWhatsAppJid(participant.id)))
+    const addedIds: string[] = []
+    const removedIds: string[] = []
+    for (const participant of removed) {
+      const jid = phoneToWhatsAppJid(participant.phoneNumber)
+      if (existing.has(cleanWhatsAppJid(jid))) {
+        requireSuccessfulParticipantUpdate(await sock.groupParticipantsUpdate(groupJid, [jid], 'remove'), participant.phoneNumber, 'remove')
+      }
+      removedIds.push(participant.id)
+    }
+    for (const participant of pending) {
+      const jid = phoneToWhatsAppJid(participant.phoneNumber)
+      if (!existing.has(cleanWhatsAppJid(jid))) {
+        const lookupResults = await sock.onWhatsApp(jid)
+        const lookup = lookupResults?.[0]
+        if (!lookup?.exists) throw new Error(`The WhatsApp number for ${participant.displayName} is not available on WhatsApp.`)
+        requireSuccessfulParticipantUpdate(await sock.groupParticipantsUpdate(groupJid, [jid], 'add'), participant.phoneNumber, 'add')
+      }
+      addedIds.push(participant.id)
+    }
+    if (addedIds.length) {
+      await prisma.whatsAppCaseParticipant.updateMany({
+        where: { id: { in: addedIds } },
+        data: { groupId, addedAt: new Date() },
+      })
+    }
+    if (removedIds.length) {
+      await prisma.whatsAppCaseParticipant.updateMany({
+        where: { id: { in: removedIds } },
+        data: { addedAt: null },
+      })
+    }
+    await prisma.whatsAppCaseGroup.update({ where: { id: groupId }, data: { error: null } })
+    return { status: 'ACTIVE', groupJid }
+  } catch (error) {
+    await prisma.whatsAppCaseGroup.update({
+      where: { id: groupId },
+      data: { error: (error instanceof Error ? error.message : String(error)).slice(0, 500) },
+    })
+    throw error
+  }
+}
+
+async function retryPendingCaseWhatsAppGroups(): Promise<void> {
+  const groups = await prisma.whatsAppCaseGroup.findMany({
+    where: {
+      funeralCase: { whatsappConsentAt: { not: null } },
+      OR: [
+        { status: { in: ['PENDING', 'FAILED'] } },
+        { status: 'CREATING', updatedAt: { lt: new Date(Date.now() - 5 * 60_000) } },
+        {
+          status: 'ACTIVE',
+          participants: {
+            some: {
+              OR: [
+                { addedAt: null, removedAt: null, OR: [{ participantType: 'STAFF' }, { consentAt: { not: null } }] },
+                { addedAt: { not: null }, removedAt: { not: null } },
+              ],
+            },
+          },
+        },
+      ],
+    },
+    select: { caseId: true },
+    orderBy: { updatedAt: 'asc' },
+    take: 25,
+  })
+  for (const group of groups) {
+    try {
+      await syncCaseWhatsAppGroup(group.caseId)
+    } catch (error) {
+      console.error(`[whatsapp/manager] Automatic group retry failed for case ${group.caseId}:`, error)
+    }
+  }
+}
+
 /** On bridge startup, resume the session if it was active before the restart. */
 export async function recoverSession(): Promise<void> {
   try {
@@ -311,6 +521,7 @@ function paced<T>(fn: () => Promise<T>): Promise<T> {
 
 async function sendRow(row: OutboxRow): Promise<SendResult> {
   const provider = 'baileys'
+  if (!env.alerts.enabled) return { ok: false, provider, error: 'Alerts are disabled by the server', retryable: false }
   if (!(await isWhatsAppEnabled())) return { ok: false, provider, error: 'WhatsApp is switched off by an admin', retryable: false }
   const sock = session?.sock
   if (!sock || !sock.ws.isOpen) return { ok: false, provider, error: 'No active WhatsApp session', retryable: true }
