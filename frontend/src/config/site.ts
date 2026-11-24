@@ -28,10 +28,9 @@ export const contact = {
 export const primaryNav: NavLink[] = [
   { label: 'Services', to: anchor('services') },
   { label: 'Plans', to: anchor('plans') },
+  { label: 'Chema Wallet', to: paths.accountChemaWallet },
   { label: 'Marketplace', to: paths.marketplace },
   { label: 'In Loving Memory', to: anchor('memorials') },
-  { label: 'Chema Wallet', to: 'http://localhost:3005' },
-  { label: 'Funeral Support', to: paths.funeralSupport },
 ]
 
 export type AccountNavItem = NavLink & { icon: IconName; end?: boolean }

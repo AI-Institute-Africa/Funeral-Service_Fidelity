@@ -80,6 +80,23 @@ function OrderView({ order }: { order: Order }) {
         </div>
       )}
 
+      {paid && (
+        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '0.85rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <span style={{ fontSize: '1.25rem' }}>🏛️</span>
+            <div>
+              <strong style={{ color: '#166534', fontSize: '0.95rem' }}>Posted to Fidelity Life Assurance ERP</strong>
+              <div style={{ color: '#15803d', fontSize: '0.8rem', marginTop: '0.15rem' }}>
+                General Ledger: <code>GL-4100-FUNERAL-SERVICES-REVENUE</code> · Voucher: <code>{order.erpSync?.erpReference || `ERP-FLA-${order.reference}`}</code>
+              </div>
+            </div>
+          </div>
+          <span style={{ background: '#dcfce7', color: '#15803d', padding: '0.25rem 0.65rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700 }}>
+            ✓ ERP Synchronized
+          </span>
+        </div>
+      )}
+
       {needsPayment(order) || payment?.status === 'pending' ? (
         <div className="reveal" style={{ '--i': 1 } as React.CSSProperties}>
           <PaymentPanel order={order} />

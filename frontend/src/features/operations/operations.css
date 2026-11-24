@@ -212,8 +212,100 @@
     border-bottom: 1px solid var(--color-border);
   }
 
-  .operations__audit-time,
+  .operations__audit-time,
   .operations__audit small { color: var(--color-text-muted); }
+
+  .operations__task-workflow {
+    display: grid;
+    gap: var(--space-4);
+    margin-top: var(--space-3);
+    padding: var(--space-4);
+    border: 1px solid var(--color-accent-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-accent-tint);
+  }
+
+  .operations__task-workflow-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+  }
+
+  .operations__steps-list,
+  .operations__logbook-list {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .operations__steps-list li {
+    padding: 8px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+  }
+
+  .operations__steps-list li.is-done {
+    border-color: var(--color-accent-border);
+    opacity: 0.85;
+  }
+
+  .operations__steps-list li.is-done .operations__step-item span {
+    text-decoration: line-through;
+  }
+
+  .operations__step-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+
+  .operations__logbook-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  .operations__logbook-form .input {
+    flex: 1 1 240px;
+  }
+
+  .operations__logbook-list li {
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+  }
+
+  .operations__logbook-list p {
+    margin: 4px 0 0;
+  }
+
+  .operations__logbook-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 0.85rem;
+  }
+
+  .operations__wa-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: rgba(16, 185, 129, 0.14);
+    color: #065f46;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
 
   @media (max-width: 900px) {
     .operations__metrics,

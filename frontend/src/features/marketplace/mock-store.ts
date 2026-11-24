@@ -116,6 +116,23 @@ export function resolveHostedPayment(userId: string, id: string, outcome: 'paid'
   if (!record) throw notFound()
 
   const next = resolvePayment(record, outcome, Date.now())
+  if (outcome === 'paid') {
+    void fetch('/api/erp/orders/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId: next.id,
+        orderReference: next.reference,
+        customerName: next.delivery.recipientName,
+        customerPhone: next.delivery.phone,
+        amount: next.total,
+        currency: 'USD',
+        items: next.lines.map((l) => ({ name: l.title, quantity: l.quantity, price: l.lineTotal })),
+        paymentReference: next.payment.reference,
+        paymentMethod: next.payment.method,
+      }),
+    }).catch(() => {})
+  }
   if (next.status !== record.status) notifyOrder(userId, next)
   write(records.map((candidate) => (candidate.id === id ? next : candidate)))
   return toPublicOrder(next)

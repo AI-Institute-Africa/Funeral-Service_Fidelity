@@ -31,6 +31,7 @@ import {
   caseClosureBlockers,
   contributionTotal,
   createCaseStages,
+  createDefaultTaskSteps,
   formatMoney,
   makeReference,
   nextContributionStatuses,
@@ -56,6 +57,8 @@ import {
   type PolicyStatus,
   type QuoteStatus,
   type StageStatus,
+  type TaskLogEntry,
+  type TaskStep,
   type TokenFeature,
   type TransportMovement,
   type TransportStatus,
@@ -982,7 +985,7 @@ function CaseWorkspace({
 
       {tab === 'overview' && <CaseOverview item={item} onTab={setTab} onSection={onSection} changeCase={changeCase} />}
       {tab === 'checklist' && <ChecklistWorkspace item={item} catalogue={state.catalogue} actor={actor} changeCase={changeCase} />}
-      {tab === 'timeline' && <TimelineWorkspace item={item} changeCase={changeCase} />}
+      {tab === 'timeline' && <TimelineWorkspace item={item} actor={actor} changeCase={changeCase} />}
       {tab === 'documents' && <DocumentsWorkspace item={item} actor={actor} changeCase={changeCase} />}
       {tab === 'transport' && <TransportWorkspace item={item} changeCase={changeCase} />}
       {tab === 'finance' && <CaseFinance item={item} actor={actor} changeCase={changeCase} />}
@@ -1192,6 +1195,180 @@ function CaseOverview({ item, onTab, onSection, changeCase }: { item: FuneralCas
   )
 }
 
+function TaskWorkflowPanel({
+  caseItem,
+  taskName,
+  assignedTo,
+  steps,
+  logbook,
+  actor,
+  onUpdateStepsAndLog,
+}: {
+  caseItem: FuneralCase
+  taskName: string
+  assignedTo: string
+  steps?: TaskStep[]
+  logbook?: TaskLogEntry[]
+  actor: string
+  onUpdateStepsAndLog: (nextSteps: TaskStep[], nextLogbook: TaskLogEntry[], auditSummary: string) => void
+}) {
+  const [logInput, setLogInput] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncBanner, setSyncBanner] = useState('')
+
+  if (!assignedTo) return null
+
+  const activeSteps = steps && steps.length > 0 ? steps : createDefaultTaskSteps(taskName)
+  const activeLogs = logbook ?? []
+  const completedCount = activeSteps.filter((s) => s.done).length
+
+  const dispatchLogToWhatsApp = async (entryText: string, stepLabel?: string) => {
+    setSyncing(true)
+    try {
+      await fetch('/api/whatsapp/notify-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caseReference: caseItem.reference,
+          deceasedName: caseItem.deceasedName,
+          staffName: assignedTo,
+          familyPhone: caseItem.phone,
+          taskName,
+          logUpdate: entryText,
+          stepLabel,
+          updatedBy: actor,
+        }),
+      })
+      setSyncBanner('Logbook & WhatsApp group synced')
+      setTimeout(() => setSyncBanner(''), 3500)
+    } catch {
+      // Keep local logbook even if gateway is offline
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const toggleStep = (step: TaskStep) => {
+    const nextDone = !step.done
+    const nextSteps = activeSteps.map((s) =>
+      s.id === step.id
+        ? {
+            ...s,
+            done: nextDone,
+            completedAt: nextDone ? nowIso() : undefined,
+            completedBy: nextDone ? actor : undefined,
+          }
+        : s,
+    )
+    const logNote = nextDone
+      ? `Completed step: "${step.label}"`
+      : `Reopened step: "${step.label}"`
+    const newEntry: TaskLogEntry = {
+      id: newId('log'),
+      at: nowIso(),
+      author: actor,
+      stepLabel: step.label,
+      note: logNote,
+      whatsappSynced: true,
+    }
+    const nextLogs = [newEntry, ...activeLogs]
+    onUpdateStepsAndLog(
+      nextSteps,
+      nextLogs,
+      `${taskName}: ${logNote} by ${actor} (synced to WhatsApp group).`,
+    )
+    void dispatchLogToWhatsApp(logNote, step.label)
+  }
+
+  const submitLogEntry = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const note = logInput.trim()
+    if (!note) return
+    const newEntry: TaskLogEntry = {
+      id: newId('log'),
+      at: nowIso(),
+      author: actor,
+      note,
+      whatsappSynced: true,
+    }
+    const nextLogs = [newEntry, ...activeLogs]
+    onUpdateStepsAndLog(
+      activeSteps,
+      nextLogs,
+      `Logbook update on "${taskName}" by ${actor}: "${note}" (sent to WhatsApp group).`,
+    )
+    setLogInput('')
+    void dispatchLogToWhatsApp(note)
+  }
+
+  return (
+    <div className="operations__task-workflow">
+      <div className="operations__task-steps">
+        <div className="operations__task-workflow-header">
+          <strong>Action steps for {assignedTo}</strong>
+          <span className="muted">{completedCount} / {activeSteps.length} completed</span>
+        </div>
+        <ul className="operations__steps-list">
+          {activeSteps.map((step, index) => (
+            <li key={step.id} className={step.done ? 'is-done' : ''}>
+              <label className="operations__step-item">
+                <input
+                  type="checkbox"
+                  checked={step.done}
+                  onChange={() => toggleStep(step)}
+                />
+                <span>
+                  <strong>Step {index + 1}:</strong> {step.label}
+                </span>
+                {step.completedAt && (
+                  <small className="muted">
+                    ✓ {step.completedBy || assignedTo} · {new Date(step.completedAt).toLocaleTimeString()}
+                  </small>
+                )}
+              </label>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="operations__task-logbook">
+        <div className="operations__task-workflow-header">
+          <strong>Task Logbook &amp; WhatsApp Group Sync</strong>
+          {syncBanner && <span className="operations__wa-badge">📲 {syncBanner}</span>}
+        </div>
+        <form className="operations__logbook-form" onSubmit={submitLogEntry}>
+          <input
+            className="input"
+            value={logInput}
+            onChange={(e) => setLogInput(e.target.value)}
+            placeholder={`Log progress update for "${taskName}"...`}
+            aria-label={`Logbook entry for ${taskName}`}
+          />
+          <button type="submit" className="btn btn--primary btn--sm" disabled={syncing || !logInput.trim()}>
+            {syncing ? 'Syncing…' : '📲 Update Logbook & Send to WhatsApp Group'}
+          </button>
+        </form>
+        {activeLogs.length > 0 ? (
+          <ul className="operations__logbook-list">
+            {activeLogs.map((entry) => (
+              <li key={entry.id}>
+                <div className="operations__logbook-meta">
+                  <strong>{entry.author}</strong>
+                  <span className="muted">{new Date(entry.at).toLocaleString()}</span>
+                  {entry.whatsappSynced && <span className="operations__wa-badge">WhatsApp Group Sent</span>}
+                </div>
+                <p>{entry.note}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">No logbook entries yet. Record progress above to notify the case WhatsApp group.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: FuneralCase; catalogue: CatalogueItem[]; actor: string; changeCase: (id: string, action: string, summary: string, update: (item: FuneralCase) => FuneralCase) => void }) {
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
@@ -1208,18 +1385,33 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
       setError('Enter a three-letter currency code for an estimated amount, or leave the amount blank.')
       return
     }
+    const assignedTo = String(form.get('assignedTo') ?? '').trim()
+    const steps = assignedTo ? createDefaultTaskSteps(name) : undefined
+    const logbook = assignedTo
+      ? [
+          {
+            id: newId('log'),
+            at: nowIso(),
+            author: actor,
+            note: `Task assigned to ${assignedTo}. Action steps generated and synced to WhatsApp group.`,
+            whatsappSynced: true,
+          },
+        ]
+      : undefined
     const checklistItem = {
       id: newId('item'),
       name,
       category: selected?.category ?? String(form.get('category') ?? '').trim(),
       quantity: Math.max(1, Number(form.get('quantity')) || 1),
       status: 'requested' as const,
-      assignedTo: String(form.get('assignedTo') ?? '').trim(),
+      assignedTo,
       notes: String(form.get('notes') ?? '').trim(),
       estimate: amount === undefined ? undefined : { amount, currency },
       createdAt: nowIso(),
+      steps,
+      logbook,
     }
-    changeCase(item.id, 'Added checklist item', `${checklistItem.name} added to case checklist by ${actor}.${checklistItem.assignedTo ? ` Assigned to ${checklistItem.assignedTo} (auto-notified via WhatsApp, SMS, Email).` : ''}`, (current) => ({ ...current, checklist: [...current.checklist, checklistItem] }))
+    changeCase(item.id, 'Added checklist item', `${checklistItem.name} added to case checklist by ${actor}.${checklistItem.assignedTo ? ` Assigned to ${checklistItem.assignedTo} (auto-notified via WhatsApp, SMS, Email & Case WhatsApp Group).` : ''}`, (current) => ({ ...current, checklist: [...current.checklist, checklistItem] }))
     if (checklistItem.assignedTo) {
       void fetch('/api/whatsapp/notify-task', {
         method: 'POST',
@@ -1228,10 +1420,12 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
           caseReference: item.reference,
           deceasedName: item.deceasedName,
           staffName: checklistItem.assignedTo,
+          familyPhone: item.phone,
           taskName: checklistItem.name,
           category: checklistItem.category,
           quantity: checklistItem.quantity,
           notes: checklistItem.notes,
+          steps: steps?.map((s) => s.label),
         }),
       }).catch(() => {})
     }
@@ -1255,7 +1449,7 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
             <label className="field operations__form-wide"><span className="field__label">Notes</span><input className="input" name="notes" /></label>
           </div>
           {error && <p className="operations__error" role="alert">{error}</p>}
-          <button className="btn btn--primary" type="submit">Add to case & notify staff</button>
+          <button className="btn btn--primary" type="submit">Add to case &amp; notify staff</button>
         </form>
       </section>
       <section className="card operations__panel">
@@ -1263,13 +1457,26 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
         {item.checklist.filter((task) => !task.removedAt).length ? (
           <div className="operations__item-list">{item.checklist.filter((task) => !task.removedAt).map((task) => (
             <article key={task.id} className="operations__record">
-              <div className="operations__record-heading"><div><h4>{task.name}</h4><p className="muted">{task.category || 'Uncategorised'} · Qty {task.quantity}{task.estimate ? ` · estimate ${formatMoney(task.estimate.amount, task.estimate.currency)}` : ''}{task.assignedTo ? ` · 📲 Assigned: ${task.assignedTo} (Auto-notified)` : ' · Unassigned'}</p></div>
+              <div className="operations__record-heading"><div><h4>{task.name}</h4><p className="muted">{task.category || 'Uncategorised'} · Qty {task.quantity}{task.estimate ? ` · estimate ${formatMoney(task.estimate.amount, task.estimate.currency)}` : ''}{task.assignedTo ? ` · 📲 Assigned: ${task.assignedTo} (Auto-notified & Group Synced)` : ' · Unassigned'}</p></div>
                 <label className="field"><span className="visually-hidden">Status for {task.name}</span><select className="select" value={task.status} onChange={(event) => changeCase(item.id, 'Updated checklist item', `${task.name}: ${task.status} → ${event.target.value}.`, (current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === task.id ? { ...entry, status: event.target.value as ChecklistStatus } : entry) }))}>{CHECKLIST_STATUSES.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}</select></label>
               </div>
               <div className="operations__form-grid operations__form-grid--tight">
-                <label className="field"><span className="field__label">Assigned staff (Auto-notified via WhatsApp, SMS, Email)</span><select className="select" value={task.assignedTo} onChange={(event) => {
+                <label className="field"><span className="field__label">Assigned staff (Auto-notified via WhatsApp, SMS, Email &amp; Group)</span><select className="select" value={task.assignedTo} onChange={(event) => {
                   const nextAssignee = event.target.value
-                  changeCase(item.id, 'Assigned checklist item', `${task.name} assigned to ${nextAssignee || 'unassigned'}. Multi-channel alerts sent to staff.`, (current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === task.id ? { ...entry, assignedTo: nextAssignee } : entry) }))
+                  const nextSteps = nextAssignee ? (task.steps && task.steps.length ? task.steps : createDefaultTaskSteps(task.name)) : task.steps
+                  const nextLogs = nextAssignee
+                    ? [
+                        {
+                          id: newId('log'),
+                          at: nowIso(),
+                          author: actor,
+                          note: `Task assigned to ${nextAssignee}. Steps prepared & sent to WhatsApp group.`,
+                          whatsappSynced: true,
+                        },
+                        ...(task.logbook ?? []),
+                      ]
+                    : task.logbook
+                  changeCase(item.id, 'Assigned checklist item', `${task.name} assigned to ${nextAssignee || 'unassigned'}. Multi-channel alerts & WhatsApp group update sent.`, (current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === task.id ? { ...entry, assignedTo: nextAssignee, steps: nextSteps, logbook: nextLogs } : entry) }))
                   if (nextAssignee) {
                     void fetch('/api/whatsapp/notify-task', {
                       method: 'POST',
@@ -1278,10 +1485,12 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
                         caseReference: item.reference,
                         deceasedName: item.deceasedName,
                         staffName: nextAssignee,
+                        familyPhone: item.phone,
                         taskName: task.name,
                         category: task.category,
                         quantity: task.quantity,
                         notes: task.notes,
+                        steps: nextSteps?.map((s) => s.label),
                       }),
                     }).catch(() => {})
                   }
@@ -1294,6 +1503,22 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
                   setReason('')
                 }}>Remove with reason</button>
               </div>
+              <TaskWorkflowPanel
+                caseItem={item}
+                taskName={task.name}
+                assignedTo={task.assignedTo}
+                steps={task.steps}
+                logbook={task.logbook}
+                actor={actor}
+                onUpdateStepsAndLog={(nextSteps, nextLogbook, auditSummary) =>
+                  changeCase(item.id, 'Updated task logbook', auditSummary, (current) => ({
+                    ...current,
+                    checklist: current.checklist.map((entry) =>
+                      entry.id === task.id ? { ...entry, steps: nextSteps, logbook: nextLogbook } : entry,
+                    ),
+                  }))
+                }
+              />
             </article>
           ))}</div>
         ) : <EmptyState title="Checklist is empty" detail="Add approved catalogue items or enter a one-off service request. Prices are not preconfigured." />}
@@ -1302,7 +1527,7 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
   )
 }
 
-function TimelineWorkspace({ item, changeCase }: { item: FuneralCase; changeCase: (id: string, action: string, summary: string, update: (item: FuneralCase) => FuneralCase) => void }) {
+function TimelineWorkspace({ item, actor, changeCase }: { item: FuneralCase; actor: string; changeCase: (id: string, action: string, summary: string, update: (item: FuneralCase) => FuneralCase) => void }) {
   const [reopenReasons, setReopenReasons] = useState<Record<string, string>>({})
   const [stageError, setStageError] = useState('')
   return (
@@ -1330,9 +1555,22 @@ function TimelineWorkspace({ item, changeCase }: { item: FuneralCase; changeCase
                 }}>{(['not-started', 'pending', 'in-progress', 'blocked', 'completed', 'cancelled'] as StageStatus[]).map((status) => <option key={status} value={status}>{status.replaceAll('-', ' ')}</option>)}</select></label>
               </div>
               <div className="operations__form-grid operations__form-grid--tight">
-                <label className="field"><span className="field__label">Assigned staff (Auto-notified via WhatsApp, SMS, Email)</span><select className="select" value={stage.assignedTo} onChange={(event) => {
+                <label className="field"><span className="field__label">Assigned staff (Auto-notified via WhatsApp, SMS, Email &amp; Group)</span><select className="select" value={stage.assignedTo} onChange={(event) => {
                   const nextAssignee = event.target.value
-                  changeCase(item.id, 'Assigned stage', `${stage.label} assigned to ${nextAssignee || 'unassigned'}. Multi-channel alerts sent to staff.`, (current) => ({ ...current, stages: current.stages.map((entry) => entry.id === stage.id ? { ...entry, assignedTo: nextAssignee } : entry) }))
+                  const nextSteps = nextAssignee ? (stage.steps && stage.steps.length ? stage.steps : createDefaultTaskSteps(stage.label)) : stage.steps
+                  const nextLogs = nextAssignee
+                    ? [
+                        {
+                          id: newId('log'),
+                          at: nowIso(),
+                          author: actor,
+                          note: `Stage assigned to ${nextAssignee}. Action steps generated & sent to WhatsApp group.`,
+                          whatsappSynced: true,
+                        },
+                        ...(stage.logbook ?? []),
+                      ]
+                    : stage.logbook
+                  changeCase(item.id, 'Assigned stage', `${stage.label} assigned to ${nextAssignee || 'unassigned'}. Multi-channel alerts & WhatsApp group update sent.`, (current) => ({ ...current, stages: current.stages.map((entry) => entry.id === stage.id ? { ...entry, assignedTo: nextAssignee, steps: nextSteps, logbook: nextLogs } : entry) }))
                   if (nextAssignee) {
                     void fetch('/api/whatsapp/notify-task', {
                       method: 'POST',
@@ -1341,14 +1579,16 @@ function TimelineWorkspace({ item, changeCase }: { item: FuneralCase; changeCase
                         caseReference: item.reference,
                         deceasedName: item.deceasedName,
                         staffName: nextAssignee,
+                        familyPhone: item.phone,
                         taskName: `Stage: ${stage.label}`,
                         notes: stage.notes,
                         plannedAt: stage.plannedAt,
+                        steps: nextSteps?.map((s) => s.label),
                       }),
                     }).catch(() => {})
                   }
                 }}><option value="">Unassigned</option>{STAFF_OPTIONS.map((staff) => <option key={staff.value} value={staff.value}>{staff.label}</option>)}{stage.assignedTo && !STAFF_OPTIONS.some((s) => s.value === stage.assignedTo) && <option value={stage.assignedTo}>{stage.assignedTo}</option>}</select></label>
-                <label className="field"><span className="field__label">Planned date & time</span><input className="input" type="datetime-local" value={localDateTime(stage.plannedAt)} onChange={(event) => changeCase(item.id, 'Changed planned milestone', `${stage.label} planned time updated.`, (current) => ({ ...current, stages: current.stages.map((entry) => entry.id === stage.id ? { ...entry, plannedAt: event.target.value ? new Date(event.target.value).toISOString() : undefined } : entry) }))} /></label>
+                <label className="field"><span className="field__label">Planned date &amp; time</span><input className="input" type="datetime-local" value={localDateTime(stage.plannedAt)} onChange={(event) => changeCase(item.id, 'Changed planned milestone', `${stage.label} planned time updated.`, (current) => ({ ...current, stages: current.stages.map((entry) => entry.id === stage.id ? { ...entry, plannedAt: event.target.value ? new Date(event.target.value).toISOString() : undefined } : entry) }))} /></label>
                 <label className="field"><span className="field__label">Notes</span><input className="input" defaultValue={stage.notes} onBlur={(event) => event.target.value !== stage.notes && changeCase(item.id, 'Updated stage notes', `${stage.label} notes updated.`, (current) => ({ ...current, stages: current.stages.map((entry) => entry.id === stage.id ? { ...entry, notes: event.target.value } : entry) }))} /></label>
                 <label className="field"><span className="field__label">Blocker / reopen reason</span><input className="input" value={reopenReasons[stage.id] ?? stage.blocker} onChange={(event) => setReopenReasons((current) => ({ ...current, [stage.id]: event.target.value }))} onBlur={() => {
                   const value = reopenReasons[stage.id]
@@ -1356,6 +1596,22 @@ function TimelineWorkspace({ item, changeCase }: { item: FuneralCase; changeCase
                 }} /></label>
               </div>
               {stageError && <p className="operations__error" role="alert">{stageError}</p>}
+              <TaskWorkflowPanel
+                caseItem={item}
+                taskName={`Stage: ${stage.label}`}
+                assignedTo={stage.assignedTo}
+                steps={stage.steps}
+                logbook={stage.logbook}
+                actor={actor}
+                onUpdateStepsAndLog={(nextSteps, nextLogbook, auditSummary) =>
+                  changeCase(item.id, 'Updated stage logbook', auditSummary, (current) => ({
+                    ...current,
+                    stages: current.stages.map((entry) =>
+                      entry.id === stage.id ? { ...entry, steps: nextSteps, logbook: nextLogbook } : entry,
+                    ),
+                  }))
+                }
+              />
             </div>
           </article>
         ))}

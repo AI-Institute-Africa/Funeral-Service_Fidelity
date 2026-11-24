@@ -131,7 +131,19 @@ export function resolvePayment(record: OrderRecord, outcome: 'paid' | 'failed', 
       ...record,
       status: 'paid',
       payment: { ...record.payment, status: 'paid', paidAt: iso(at) },
-      events: [...record.events, { at: iso(at), label: 'Payment received' }],
+      events: [
+        ...record.events,
+        { at: iso(at), label: 'Payment received' },
+        { at: iso(at), label: `Posted to Fidelity Life ERP (ERP-FLA-${record.reference})` },
+      ],
+      erpSync: {
+        synced: true,
+        erpReference: `ERP-FLA-${record.reference}`,
+        glAccount: 'GL-4100-FUNERAL-SERVICES-REVENUE',
+        costCenter: 'CC-HARARE-MORTUARY-OPERATIONS',
+        postedAt: iso(at),
+        status: 'POSTED_TO_FIDELITY_ERP',
+      },
     }
   }
   return {

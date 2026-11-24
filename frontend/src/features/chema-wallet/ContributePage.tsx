@@ -232,6 +232,32 @@ export default function ContributePage() {
           <div className="cw-public__hero-content">
             <span className="cw-public__verified"><Icon name="shield" size={16} /> Community verified funeral case</span>
             <h1>Support the family of {publicName}</h1>
+            <div style={{ margin: '0.75rem 0' }}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  document.getElementById('cw-donate-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }}
+                style={{
+                  background: '#b91c1c',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '1rem',
+                  padding: '0.7rem 1.5rem',
+                  borderRadius: '9999px',
+                  boxShadow: '0 4px 14px rgba(185, 28, 28, 0.35)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  border: 'none',
+                }}
+              >
+                <Icon name="wallet" size={18} />
+                Pay / Contribute Now 💳
+              </button>
+            </div>
             <p className="cw-public__service">{item.funeralInfo}</p>
             <div className="cw-public__meta">
               <span>Case {item.caseRef}</span>

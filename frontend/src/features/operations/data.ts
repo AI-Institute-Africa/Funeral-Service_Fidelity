@@ -73,6 +73,32 @@ export type PolicyApplication = {
   demo: boolean
 }
 
+export type TaskStep = {
+  id: string
+  label: string
+  done: boolean
+  completedAt?: string
+  completedBy?: string
+}
+
+export type TaskLogEntry = {
+  id: string
+  at: string
+  author: string
+  stepLabel?: string
+  note: string
+  whatsappSynced?: boolean
+}
+
+export function createDefaultTaskSteps(taskName: string): TaskStep[] {
+  return [
+    { id: 'step-1', label: `Acknowledge assignment for "${taskName}"`, done: false },
+    { id: 'step-2', label: 'Confirm logistics, equipment & team readiness', done: false },
+    { id: 'step-3', label: 'Execute task & record field progress in logbook', done: false },
+    { id: 'step-4', label: 'Verify completion & notify family/WhatsApp group', done: false },
+  ]
+}
+
 export type CaseStage = {
   id: string
   label: string
@@ -82,6 +108,8 @@ export type CaseStage = {
   actualAt?: string
   notes: string
   blocker: string
+  steps?: TaskStep[]
+  logbook?: TaskLogEntry[]
 }
 
 export type ChecklistItem = {
@@ -96,6 +124,8 @@ export type ChecklistItem = {
   createdAt: string
   removedAt?: string
   removalReason?: string
+  steps?: TaskStep[]
+  logbook?: TaskLogEntry[]
 }
 
 export type CaseDocument = {

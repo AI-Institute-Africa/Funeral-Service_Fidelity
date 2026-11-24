@@ -13,6 +13,7 @@ import { createOperationsRouter } from './routes/operationsRoutes'
 import { createAssistantRouter } from './routes/assistantRoutes'
 import { createWhatsAppRouter } from './routes/whatsappRoutes'
 import { createMemorialRouter } from './routes/memorialRoutes'
+import { createErpRouter } from './routes/erpRoutes'
 
 /** Async because the alerts runtime connects to the job queue before its routes can be mounted. */
 export async function createApp() {
@@ -46,6 +47,7 @@ export async function createApp() {
   app.use('/api', createMemorialRouter())
   app.use('/api/assistant', createAssistantRouter())
   app.use('/api/whatsapp', createWhatsAppRouter())
+  app.use('/api/erp', createErpRouter())
 
   const alerts = await createAlertsRuntime()
   if (alerts) {

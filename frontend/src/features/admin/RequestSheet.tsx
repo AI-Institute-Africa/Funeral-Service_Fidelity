@@ -9,7 +9,7 @@ import { formatAge, formatServiceTime } from '@/lib/format'
 import { formatPhone } from '@/lib/phone'
 import type { AdminRequest } from './data'
 import { assignmentDisplay, requestActionLabel, requestStatusDisplay, usePortalRole } from './portal-ui'
-import { useAssignRequest, useProviders, useRespondToRequest } from './queries'
+import { useAssignRequest, useRespondToRequest } from './queries'
 import './portal.css'
 
 type RequestSheetProps = {

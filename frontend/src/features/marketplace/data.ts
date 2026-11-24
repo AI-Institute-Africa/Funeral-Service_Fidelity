@@ -150,6 +150,14 @@ export type Order = {
   events: OrderEvent[]
   inMemoryOf?: string
   createdAt: string
+  erpSync?: {
+    synced: boolean
+    erpReference: string
+    glAccount: string
+    costCenter?: string
+    postedAt: string
+    status: string
+  }
 }
 
 export const ALL_CATEGORIES = 'All'

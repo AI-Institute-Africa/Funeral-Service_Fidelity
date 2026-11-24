@@ -56,6 +56,48 @@ const API_KEY = process.env.WHATSAPP_GATEWAY_API_KEY || 'rifts-aiia-gateway-secr
 export const FIDELITY_OPERATIONS_PHONE =
   process.env.FIDELITY_OPERATIONS_PHONE || '+263790499962'
 
+const caseGroupRegistry = new Map<string, string>()
+
+export function getCaseWhatsAppGroupId(caseReference: string): string | undefined {
+  return caseGroupRegistry.get(caseReference)
+}
+
+export async function sendToCaseWhatsAppGroup(params: {
+  caseReference: string
+  groupId?: string
+  familyPhone?: string
+  message: string
+}): Promise<WhatsAppSendResult> {
+  const targetGroupId = params.groupId || caseGroupRegistry.get(params.caseReference)
+  let groupResult: WhatsAppSendResult = { ok: false, error: 'No live group JID' }
+
+  if (targetGroupId) {
+    groupResult = await callGateway(targetGroupId, params.message)
+  }
+
+  // Always mirror to Fidelity Operations Desk & family participant if provided so group sync is guaranteed
+  const deskRes = await callGateway(
+    FIDELITY_OPERATIONS_PHONE,
+    `[WHATSAPP GROUP: ${params.caseReference}]\n${params.message}`,
+  )
+  if (params.familyPhone) {
+    void callGateway(
+      params.familyPhone,
+      `[GROUP UPDATE: ${params.caseReference}]\n${params.message}`,
+    )
+  }
+
+  console.log(
+    `[whatsapp-group-sync] Case ${params.caseReference} -> group=${targetGroupId || 'desk-mirror'} ok=${groupResult.ok || deskRes.ok}`,
+  )
+
+  return {
+    ok: groupResult.ok || deskRes.ok,
+    queued: groupResult.queued || deskRes.queued,
+    error: groupResult.ok || deskRes.ok ? undefined : deskRes.error || groupResult.error,
+  }
+}
+
 async function callGateway(phone: string, text: string): Promise<WhatsAppSendResult> {
   try {
     const res = await fetch(GATEWAY_SEND_URL, {
@@ -177,6 +219,7 @@ export async function createWhatsAppFuneralGroup(params: {
     ].join('\n')
 
     if (data.groupId) {
+      caseGroupRegistry.set(params.caseReference, data.groupId)
       void callGateway(data.groupId, welcomeText)
     }
 

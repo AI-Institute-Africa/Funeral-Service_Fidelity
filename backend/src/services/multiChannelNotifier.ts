@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma'
 import { createSmsProvider } from '../alerts/providers/sms'
 import {
   FIDELITY_OPERATIONS_PHONE,
+  sendToCaseWhatsAppGroup,
   sendWhatsAppAlert,
   type WhatsAppAlertKind,
 } from './whatsappGateway'
@@ -87,12 +88,14 @@ export type WorkflowEventType =
   | 'walkin_request'
   | 'case_assigned'
   | 'task_assigned'
+  | 'task_log_update'
   | 'status_update'
 
 export interface MultiChannelDispatchInput {
   event: WorkflowEventType
   caseReference: string
   deceasedName?: string
+  groupId?: string
   customer?: {
     name?: string
     phone?: string
@@ -112,6 +115,14 @@ export interface MultiChannelDispatchInput {
     estimate?: string
     notes?: string
     plannedAt?: string
+    steps?: string[]
+  }
+  logUpdate?: {
+    entry: string
+    step?: string
+    previousStatus?: string
+    nextStatus?: string
+    updatedBy?: string
   }
   notes?: string
   inviteLink?: string
@@ -139,9 +150,12 @@ export async function dispatchWorkflowNotifications(input: MultiChannelDispatchI
   } = {}
 
   // ─────────────────────────────────────────────────────────────
-  // 1. STAFF NOTIFICATIONS (for case coordinator & task assignment)
+  // 1. STAFF NOTIFICATIONS (for case coordinator, task assignment, & task logbook updates)
   // ─────────────────────────────────────────────────────────────
-  if (input.assignedStaff?.name && (input.event === 'case_assigned' || input.event === 'task_assigned')) {
+  if (
+    input.assignedStaff?.name &&
+    (input.event === 'case_assigned' || input.event === 'task_assigned' || input.event === 'task_log_update')
+  ) {
     const staff = resolveStaffContact(input.assignedStaff.name)
     const staffPhone = input.assignedStaff.phone || staff.phone || FIDELITY_OPERATIONS_PHONE
     const staffEmail = input.assignedStaff.email || staff.email
@@ -170,6 +184,9 @@ export async function dispatchWorkflowNotifications(input: MultiChannelDispatchI
       emailBody = `Dear ${staff.name},\n\nYou have been assigned as Lead Coordinator for Funeral Case ${input.caseReference} (Late ${input.deceasedName || 'N/A'}).\n\nFamily Representative: ${input.customer?.name || 'Customer'} (${input.customer?.phone || 'N/A'})\nInstructions: ${input.notes || 'Coordinate intake, body collection, and burial schedule.'}\n\nPlease log in to the Operations Portal to begin managing milestones.\n\nFidelity Life Assurance Operations Desk`
     } else if (input.event === 'task_assigned') {
       const taskTitle = input.task?.name || 'Assigned Task'
+      const stepsBlock = input.task?.steps?.length
+        ? `\n*Action Steps:*\n${input.task.steps.map((s, idx) => `${idx + 1}. ${s}`).join('\n')}`
+        : ''
       emailSubject = `[Fidelity Ops] New Task Assigned: ${taskTitle} (Case ${input.caseReference})`
       waText = [
         '📝 *FIDELITY TASK ASSIGNMENT ALERT*',
@@ -182,12 +199,58 @@ export async function dispatchWorkflowNotifications(input: MultiChannelDispatchI
         input.task?.plannedAt ? `Scheduled: *${input.task.plannedAt}*` : '',
         input.task?.notes ? `Notes: “${input.task.notes}”` : '',
         `Late: *${input.deceasedName || 'N/A'}*`,
+        stepsBlock,
         '',
-        '👉 Update status in Operations Portal: http://localhost:3000/provider-portal/operations?section=cases',
+        '👉 Update logbook & status in Operations Portal: http://localhost:3000/provider-portal/operations?section=cases',
       ].filter(Boolean).join('\n')
 
-      smsText = `FLA Task Alert: You are assigned '${taskTitle}' for Case ${input.caseReference} (Late ${input.deceasedName || 'N/A'}). Update status in portal: http://localhost:3000/provider-portal/operations`
-      emailBody = `Dear ${staff.name},\n\nYou have been assigned the following task on Case ${input.caseReference} (Late ${input.deceasedName || 'N/A'}):\n\nTask: ${taskTitle}\nCategory: ${input.task?.category || 'General'}\nNotes: ${input.task?.notes || 'Please complete according to schedule.'}\n\nFidelity Life Assurance Operations Desk`
+      smsText = `FLA Task Alert: You are assigned '${taskTitle}' for Case ${input.caseReference} (Late ${input.deceasedName || 'N/A'}). Update logbook in portal: http://localhost:3000/provider-portal/operations`
+      emailBody = `Dear ${staff.name},\n\nYou have been assigned the following task on Case ${input.caseReference} (Late ${input.deceasedName || 'N/A'}):\n\nTask: ${taskTitle}\nCategory: ${input.task?.category || 'General'}\nNotes: ${input.task?.notes || 'Please complete according to schedule.'}${stepsBlock ? `\n${stepsBlock}` : ''}\n\nFidelity Life Assurance Operations Desk`
+
+      // Simultaneously broadcast task assignment to the case's WhatsApp group
+      void sendToCaseWhatsAppGroup({
+        caseReference: input.caseReference,
+        groupId: input.groupId,
+        familyPhone: input.customer?.phone,
+        message: [
+          '📌 *CASE TASK ASSIGNED*',
+          `Case: *${input.caseReference}* (Late *${input.deceasedName || 'N/A'}*)`,
+          `Task: *${taskTitle}*`,
+          `Assigned Staff: *${staff.name}* (${staff.jobTitle})`,
+          stepsBlock,
+        ].filter(Boolean).join('\n'),
+      })
+    } else if (input.event === 'task_log_update') {
+      const taskTitle = input.task?.name || 'Assigned Task'
+      const logEntry = input.logUpdate?.entry || 'Progress updated.'
+      const stepLabel = input.logUpdate?.step ? `Step: *${input.logUpdate.step}*` : ''
+      const statusLine =
+        input.logUpdate?.nextStatus
+          ? `Status: *${input.logUpdate.previousStatus ? `${input.logUpdate.previousStatus} → ` : ''}${input.logUpdate.nextStatus}*`
+          : ''
+      const author = input.logUpdate?.updatedBy || staff.name
+      emailSubject = `[Fidelity Ops] Task Logbook Update: ${taskTitle} (Case ${input.caseReference})`
+      waText = [
+        '📒 *FIDELITY TASK LOGBOOK UPDATE*',
+        '',
+        `Case: *${input.caseReference}* (Late *${input.deceasedName || 'N/A'}*)`,
+        `Task: *${taskTitle}*`,
+        `Assigned To: *${staff.name}*`,
+        stepLabel,
+        statusLine,
+        `Log Entry (${author}): “${logEntry}”`,
+      ].filter(Boolean).join('\n')
+
+      smsText = `FLA Logbook (${input.caseReference}): ${taskTitle} updated by ${author}. ${logEntry}`
+      emailBody = `Task Logbook Update for Case ${input.caseReference} (Late ${input.deceasedName || 'N/A'})\n\nTask: ${taskTitle}\nAssigned Staff: ${staff.name}\n${input.logUpdate?.step ? `Step: ${input.logUpdate.step}\n` : ''}${input.logUpdate?.nextStatus ? `Status: ${input.logUpdate.nextStatus}\n` : ''}Log Entry (${author}): ${logEntry}\n\nFidelity Life Assurance Operations Desk`
+
+      // Simultaneously broadcast logbook update to the case's WhatsApp group
+      void sendToCaseWhatsAppGroup({
+        caseReference: input.caseReference,
+        groupId: input.groupId,
+        familyPhone: input.customer?.phone,
+        message: waText,
+      })
     }
 
     // 1. WhatsApp to Staff
@@ -216,13 +279,24 @@ export async function dispatchWorkflowNotifications(input: MultiChannelDispatchI
     }
 
     // Log to Audit
+    const auditAction =
+      input.event === 'case_assigned'
+        ? 'Staff Notified (Case Assignment)'
+        : input.event === 'task_log_update'
+          ? 'Task Logbook Synced to WhatsApp Group'
+          : 'Staff & Group Notified (Task Assignment)'
+    const auditSummary =
+      input.event === 'task_log_update'
+        ? `Logbook entry for "${input.task?.name}" on ${input.caseReference} by ${input.logUpdate?.updatedBy || staff.name}: "${input.logUpdate?.entry}" — synced simultaneously to WhatsApp group.`
+        : `Staff member ${staff.name} (${staffPhone}) notified via WhatsApp, SMS, and Email (${staffEmail}) for ${input.event === 'case_assigned' ? 'coordinator assignment' : `task "${input.task?.name}"`} (synced to WhatsApp group).`
+
     void prisma.operationAuditEntry.create({
       data: {
         id: `audit-${randomUUID()}`,
         actor: 'Notification Engine',
-        action: input.event === 'case_assigned' ? 'Staff Notified (Case Assignment)' : 'Staff Notified (Task Assignment)',
+        action: auditAction,
         entity: input.caseReference,
-        summary: `Staff member ${staff.name} (${staffPhone}) notified via WhatsApp, SMS, and Email (${staffEmail}) for ${input.event === 'case_assigned' ? 'coordinator assignment' : `task "${input.task?.name}"`}.`,
+        summary: auditSummary,
         demo: false,
       },
     }).catch(() => {})

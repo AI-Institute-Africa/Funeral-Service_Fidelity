@@ -201,7 +201,8 @@ export function createWhatsAppRouter() {
 
   /**
    * POST /api/whatsapp/notify-task
-   * Notifies staff member via WhatsApp, Email, and SMS when assigned a task, stage, or checklist item.
+   * Notifies staff member via WhatsApp, Email, and SMS AND broadcasts to the case WhatsApp group simultaneously
+   * when assigned a task, stage, or checklist item (or when a task logbook entry is recorded).
    */
   router.post('/notify-task', async (req, res) => {
     try {
@@ -211,21 +212,32 @@ export function createWhatsAppRouter() {
         staffName,
         staffPhone,
         staffEmail,
+        familyPhone,
+        groupId,
         taskName,
         category,
         quantity,
         notes,
         plannedAt,
+        steps,
+        logUpdate,
+        stepLabel,
+        previousStatus,
+        nextStatus,
+        updatedBy,
       } = req.body
 
       if (!caseReference || !staffName || !taskName) {
         return res.status(400).json({ ok: false, error: 'Case reference, staff name, and task name are required.' })
       }
 
+      const isLogUpdate = Boolean(logUpdate)
       const results = await dispatchWorkflowNotifications({
-        event: 'task_assigned',
+        event: isLogUpdate ? 'task_log_update' : 'task_assigned',
         caseReference,
         deceasedName,
+        groupId,
+        customer: familyPhone ? { phone: familyPhone } : undefined,
         assignedStaff: {
           name: staffName,
           phone: staffPhone,
@@ -237,12 +249,24 @@ export function createWhatsAppRouter() {
           quantity,
           notes,
           plannedAt,
+          steps: Array.isArray(steps) ? steps : undefined,
         },
+        logUpdate: isLogUpdate
+          ? {
+              entry: String(logUpdate),
+              step: stepLabel ? String(stepLabel) : undefined,
+              previousStatus: previousStatus ? String(previousStatus) : undefined,
+              nextStatus: nextStatus ? String(nextStatus) : undefined,
+              updatedBy: updatedBy ? String(updatedBy) : staffName,
+            }
+          : undefined,
       })
 
       res.json({
         ok: true,
-        message: `Staff member ${staffName} notified for task "${taskName}" via WhatsApp, SMS & Email.`,
+        message: isLogUpdate
+          ? `Logbook update for "${taskName}" synced to ${staffName} and the case WhatsApp group.`
+          : `Staff member ${staffName} and case WhatsApp group notified for task "${taskName}".`,
         details: results,
       })
     } catch (error) {

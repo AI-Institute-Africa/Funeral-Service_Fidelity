@@ -66,7 +66,7 @@ export function NoPolicyCard() {
 }
 
 export function ChemaWalletAccountCard({ phone }: { phone?: string }) {
-  const ssoUrl = http://localhost:7600/auth/fidelity-sso?phone=&target=/new
+  const ssoUrl = `http://localhost:7600/auth/fidelity-sso?phone=${encodeURIComponent(phone || '')}&target=/new`
   return (
     <article className="card panel" style={{ borderLeft: '4px solid #b91c1c' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
@@ -74,7 +74,7 @@ export function ChemaWalletAccountCard({ phone }: { phone?: string }) {
           <Icon name="wallet" size={20} />
         </span>
         <h2 className="panel__title" style={{ margin: 0, fontSize: '1.05rem' }}>
-          Chema Wallet · Family Fund
+          Chema Wallet ï¿½ Family Fund
         </h2>
       </div>
       <p className="muted" style={{ fontSize: '0.875rem', lineHeight: 1.5, marginBottom: '1rem' }}>
