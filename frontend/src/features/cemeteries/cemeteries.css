@@ -9,3 +9,92 @@
   .cem-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
   .cem-check { display: flex; gap: 8px; align-items: center; padding-bottom: 12px; }
 }
+
+/* ======= Digital Grave Offerings ======= */
+.grave-offerings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.offering-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.1s;
+  font-size: 0.8rem;
+  min-width: 80px;
+}
+
+.offering-btn:hover {
+  border-color: #b91c1c;
+  transform: scale(1.05);
+}
+
+.offering-btn .offering-visual {
+  font-size: 2.5rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+}
+
+.offering-btn.offering-btn--candle .offering-visual {
+  animation: flicker 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes flicker {
+  0% { transform: scale(1) rotate(-1deg); filter: drop-shadow(0 0 6px rgba(255, 150, 50, 0.8)); }
+  25% { transform: scale(1.05) rotate(1deg); filter: drop-shadow(0 0 10px rgba(255, 150, 50, 1)); }
+  50% { transform: scale(0.98) rotate(-0.5deg); filter: drop-shadow(0 0 5px rgba(255, 150, 50, 0.7)); }
+  75% { transform: scale(1.03) rotate(1.5deg); filter: drop-shadow(0 0 12px rgba(255, 150, 50, 1)); }
+  100% { transform: scale(1) rotate(-1deg); filter: drop-shadow(0 0 8px rgba(255, 150, 50, 0.9)); }
+}
+
+.offering-placed {
+  background: #f0fdf4;
+  border: 2px solid #22c55e;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+}
+
+/* ======= Grave Pinpoint Tool ======= */
+.grave-pinpoint {
+  margin-top: 1rem;
+  border: 2px dashed #b91c1c;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: #fff5f5;
+}
+
+.grave-pinpoint h4 {
+  margin: 0 0 0.75rem;
+  color: #b91c1c;
+  font-size: 0.95rem;
+}
+
+.grave-pinpoint .pinpoint-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.grave-pinpoint .pinpoint-grid .field {
+  margin: 0;
+}
+
+.pinpoint-saved {
+  background: #f0fdf4;
+  border: 1px solid #22c55e;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}

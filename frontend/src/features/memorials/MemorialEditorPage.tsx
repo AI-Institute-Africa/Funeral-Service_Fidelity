@@ -24,7 +24,7 @@ const tabs: { id: TabId; label: string }[] = [
   { id: 'details', label: 'Details' },
   { id: 'story', label: 'Story' },
   { id: 'photos', label: 'Photos' },
-  { id: 'tributes', label: 'Tributes' },
+  { id: 'tributes', label: 'In Loving Memory' },
   { id: 'share', label: 'Share' },
 ]
 
@@ -83,7 +83,7 @@ function EditorView({ memorial }: { memorial: OwnedMemorial }) {
   const requested = params.get('tab')
   const active: TabId = isTab(requested) ? requested : 'details'
   const { percent, steps } = completeness(memorial)
-  const remaining = steps.filter((step) => !step.done)
+  const remaining = (steps ?? []).filter((step) => !step.done)
 
   return (
     <div className="page-stack">
@@ -91,7 +91,7 @@ function EditorView({ memorial }: { memorial: OwnedMemorial }) {
         <Portrait memorial={memorial} size="md" />
         <div className="editor-head__main">
           <p className="eyebrow">Memorial</p>
-          <h1>{memorial.name}</h1>
+          <h1>{memorial.name || 'In Loving Memory'}</h1>
           <p className="muted">
             {lifespan(memorial.born, memorial.died)}
             {memorial.location && <> · {memorial.location}</>}
@@ -101,7 +101,7 @@ function EditorView({ memorial }: { memorial: OwnedMemorial }) {
           <StatusChip tone={memorial.published ? 'success' : 'neutral'}>
             {memorial.published ? 'Published' : 'Private draft'}
           </StatusChip>
-          <Link className="btn btn--outline btn--sm" to={memorialPath(memorial.slug)}>
+          <Link className="btn btn--outline btn--sm" to={memorialPath(memorial.slug || memorial.id)}>
             {memorial.published ? 'View page' : 'Preview'}
             <Icon name="arrow-right" size={16} />
           </Link>
@@ -121,8 +121,8 @@ function EditorView({ memorial }: { memorial: OwnedMemorial }) {
       )}
 
       <section className="card editor-progress reveal" style={{ '--i': 1 } as React.CSSProperties} aria-label="Memorial progress">
-        <ProgressRing progress={percent / 100} label={`${percent}% complete`} size={88}>
-          <strong>{percent}%</strong>
+        <ProgressRing progress={(percent || 0) / 100} label={`${percent || 0}% complete`} size={88}>
+          <strong>{percent || 0}%</strong>
         </ProgressRing>
         <div>
           <h2 className="panel__title">{remaining.length === 0 ? 'Beautifully complete' : 'Make it complete'}</h2>
@@ -151,7 +151,7 @@ function EditorView({ memorial }: { memorial: OwnedMemorial }) {
                 aria-current={tab.id === active ? 'page' : undefined}
               >
                 {tab.label}
-                {tab.id === 'tributes' && memorial.pendingTributes > 0 && (
+                {tab.id === 'tributes' && (memorial.pendingTributes ?? 0) > 0 && (
                   <span className="count-pill" aria-label={`${memorial.pendingTributes} waiting`}>
                     {memorial.pendingTributes}
                   </span>

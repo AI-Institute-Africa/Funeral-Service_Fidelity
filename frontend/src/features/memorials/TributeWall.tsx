@@ -16,12 +16,13 @@ const tributeDate = (iso: string) =>
 
 export function TributeWall({ slug, name }: { slug: string; name: string }) {
   const tributes = usePublicTributes(slug)
+  const firstName = (name || 'our loved one').trim().split(' ')[0]
 
   return (
     <section className="memorial-section" id="tributes" aria-labelledby="tributes-title">
-      <p className="eyebrow">Tributes</p>
+      <p className="eyebrow">In Loving Memory</p>
       <h2 id="tributes-title" className="memorial-section__title">
-        Words for {name.split(' ')[0]}
+        Words for {firstName}
       </h2>
 
       <div className="tributes">
@@ -53,7 +54,7 @@ export function TributeWall({ slug, name }: { slug: string; name: string }) {
               isPending={tributes.isPending}
               error={tributes.error}
               onRetry={() => void tributes.refetch()}
-              noun="tributes"
+              noun="messages in loving memory"
               skeleton
             />
           )}
@@ -82,6 +83,7 @@ function TributeForm({ slug, name }: { slug: string; name: string }) {
   const [message, setMessage] = useState('')
   const [errors, setErrors] = useState<FieldErrors<'authorName' | 'relationship' | 'message'>>({})
   const submit = useSubmitTribute(slug)
+  const firstName = (name || 'their').trim().split(' ')[0]
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -108,8 +110,8 @@ function TributeForm({ slug, name }: { slug: string; name: string }) {
         <h3>Thank you</h3>
         <p>
           {approved
-            ? 'Your tribute is now part of the wall.'
-            : `Your words have been sent to ${name.split(' ')[0]}’s family. They’ll appear once the family has read and approved them.`}
+            ? 'Your message is now part of In Loving Memory.'
+            : `Your words have been sent to ${firstName}’s family. They’ll appear once the family has read and approved them.`}
         </p>
         <button type="button" className="btn btn--outline btn--sm" onClick={() => submit.reset()}>
           Write another
@@ -120,7 +122,7 @@ function TributeForm({ slug, name }: { slug: string; name: string }) {
 
   return (
     <form className="card tribute-form stack" onSubmit={handleSubmit} noValidate>
-      <h3>Share a tribute</h3>
+      <h3>In Loving Memory</h3>
       <TextField
         label="Your name"
         autoComplete="name"
@@ -138,7 +140,7 @@ function TributeForm({ slug, name }: { slug: string; name: string }) {
       />
       <div className="field">
         <label className="field__label" htmlFor="tribute-message">
-          Your message
+          Your message in loving memory
         </label>
         <textarea
           id="tribute-message"
@@ -148,7 +150,7 @@ function TributeForm({ slug, name }: { slug: string; name: string }) {
           onChange={(event) => setMessage(event.target.value)}
           aria-invalid={errors.message ? true : undefined}
           aria-describedby={errors.message ? 'tribute-message-error' : undefined}
-          placeholder="A memory, a thank you, a few kind words…"
+          placeholder="A memory, a thank you, a few kind words in loving memory…"
         />
         <small className="field__hint">
           {message.length}/{TRIBUTE_MAX_LENGTH}
@@ -167,9 +169,9 @@ function TributeForm({ slug, name }: { slug: string; name: string }) {
       )}
 
       <button type="submit" className="btn btn--primary" disabled={submit.isPending}>
-        {submit.isPending ? 'Sending…' : 'Send tribute'}
+        {submit.isPending ? 'Sending…' : 'Share in Loving Memory'}
       </button>
-      <p className="tribute-form__note">The family reads every tribute before it is shown.</p>
+      <p className="tribute-form__note">The family reads every message in loving memory before it is shown.</p>
     </form>
   )
 }

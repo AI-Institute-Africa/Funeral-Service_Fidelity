@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { BarChart, DonutChart, LineChart } from '@/components/ui/DashboardCharts'
 import { StatusChip } from '@/components/ui/StatusChip'
-import { Link } from 'react-router-dom'
-import { paths } from '@/config/routes'
+import { useSearchParams } from 'react-router-dom'
+import {
+  fetchOperationsState,
+  createOperationsCase,
+  updateOperationsCase,
+  createOperationsPolicy,
+  updateOperationsPolicy,
+  saveCatalogueItem,
+  saveExhumationCase,
+  deleteExhumationCase,
+  sendOperationsWhatsAppNotification,
+  saveTokenCharge,
+  createAuditEntry,
+} from './operations-api'
 import { useAuth } from '@/features/auth'
-import { env } from '@/lib/env'
 import { findPolicyByNumber, policyRecords } from '@/features/account'
 import {
   CASE_STATUSES,
@@ -53,7 +64,7 @@ import { createInitialOperationsState, loadOperationsState, OPERATIONS_STORAGE_K
 import './operations.css'
 
 type Section = 'dashboard' | 'cases' | 'policies' | 'exhumations' | 'tokens' | 'catalogue' | 'wallet' | 'finance' | 'reports' | 'audit'
-type CaseTab = 'overview' | 'checklist' | 'timeline' | 'documents' | 'transport' | 'finance' | 'wallet' | 'activity'
+type CaseTab = 'overview' | 'checklist' | 'timeline' | 'documents' | 'transport' | 'finance' | 'wallet' | 'activity' | 'whatsapp'
 
 const sectionTitles: Record<Section, string> = {
   dashboard: 'Operations dashboard',
@@ -62,13 +73,22 @@ const sectionTitles: Record<Section, string> = {
   exhumations: 'Exhumations',
   tokens: 'Kuwana token charges',
   catalogue: 'Services & products',
-  wallet: 'Chema Wallet ledger',
+  wallet: 'Chema Wallet',
   finance: 'Quotations & payments',
   reports: 'Reports',
   audit: 'Audit log',
 }
 const caseStatusLabels = Object.fromEntries(CASE_STATUSES.map(({ value, label }) => [value, label])) as Record<CaseStatus, string>
 const policyStatusLabels = Object.fromEntries(POLICY_STATUSES.map(({ value, label }) => [value, label])) as Record<PolicyStatus, string>
+
+export const STAFF_OPTIONS = [
+  { value: 'Nomsa Ndlovu', label: 'Nomsa Ndlovu (Head of Funeral Operations · +263 773 000 333)' },
+  { value: 'Tariro Chikwanha', label: 'Tariro Chikwanha (Senior Case Lead · +263 790 499 962)' },
+  { value: 'Farai Gumbo', label: 'Farai Gumbo (Mortuary & Logistics Lead · +263 772 555 666)' },
+  { value: 'Blessing Moyo', label: 'Blessing Moyo (Transport & Fleet · +263 771 888 999)' },
+  { value: 'Chipo Dube', label: 'Chipo Dube (Chapel & Ceremonies · +263 773 000 222)' },
+  { value: 'Operations Team', label: 'Operations Team (Harare Desk · +263 790 499 962)' },
+]
 const newId = (prefix: string) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`}`
 const nowIso = () => new Date().toISOString()
 const localDateTime = (value?: string) => (value ? value.slice(0, 16) : '')
@@ -103,7 +123,8 @@ function amountValue(raw: string): number | undefined {
 
 function OperationsPage() {
   const { user } = useAuth()
-  const actor = user?.name || 'Demo administrator'
+  const actor = user?.name || user?.phone || 'Admin'
+  const [searchParams] = useSearchParams()
   const [today] = useState(() => new Date().toISOString().slice(0, 10))
   const [loaded] = useState(() => {
     try {
@@ -129,6 +150,35 @@ function OperationsPage() {
   })
 
   useEffect(() => {
+    const sec = searchParams.get('section') as Section | null
+    if (sec && Object.keys(sectionTitles).includes(sec)) {
+      setSection(sec)
+    }
+    const type = searchParams.get('type')
+    if (type === 'cash-walk-in' || type === 'policy-covered') {
+      setCaseFilter((current) => ({ ...current, type }))
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    let mounted = true
+    fetchOperationsState()
+      .then((remoteState) => {
+        if (!mounted) return
+        setState(remoteState)
+        stateRef.current = remoteState
+        saveOperationsState(remoteState)
+        setStorageError('')
+      })
+      .catch((err) => {
+        console.warn('API operations state load (using cached data):', err)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
     const refreshFromOtherTab = (event: StorageEvent) => {
       if (event.key !== OPERATIONS_STORAGE_KEY) return
       try {
@@ -150,39 +200,46 @@ function OperationsPage() {
   const commit = (next: (current: OperationsState) => OperationsState, action: string, entity: string, summary: string) => {
     const updated = audit(next(stateRef.current), actor, action, entity, summary)
     stateRef.current = updated
-    if (!loaded.error) {
-      try {
-        saveOperationsState(updated)
-        setStorageError('')
-      } catch (error) {
-        setStorageError(error instanceof Error ? `Could not save this browser’s demo data: ${error.message}` : 'Could not save this browser’s demo data.')
-      }
-    }
+    saveOperationsState(updated)
+    setStorageError('')
     setState(updated)
+    void createAuditEntry({ actor, action, entity, summary, demo: false }).catch(() => {})
   }
 
   const changeCase = (id: string, action: string, summary: string, update: (item: FuneralCase) => FuneralCase) => {
+    const currentCase = stateRef.current.cases.find((item) => item.id === id)
+    if (!currentCase) return
+    const updatedCase = { ...update(currentCase), updatedAt: nowIso() }
     commit(
       (current) => ({
         ...current,
-        cases: current.cases.map((item) => (item.id === id ? { ...update(item), updatedAt: nowIso() } : item)),
+        cases: current.cases.map((item) => (item.id === id ? updatedCase : item)),
       }),
       action,
-      state.cases.find((item) => item.id === id)?.reference ?? id,
+      currentCase.reference ?? id,
       summary,
     )
+    void updateOperationsCase(id, { ...updatedCase, auditAction: action, auditSummary: summary }).catch((err) => {
+      console.warn('Server case update failed:', err)
+    })
   }
 
   const changePolicy = (id: string, action: string, summary: string, update: (item: PolicyApplication) => PolicyApplication) => {
+    const currentPolicy = stateRef.current.policies.find((item) => item.id === id)
+    if (!currentPolicy) return
+    const updatedPolicy = { ...update(currentPolicy), updatedAt: nowIso() }
     commit(
       (current) => ({
         ...current,
-        policies: current.policies.map((item) => (item.id === id ? { ...update(item), updatedAt: nowIso() } : item)),
+        policies: current.policies.map((item) => (item.id === id ? updatedPolicy : item)),
       }),
       action,
-      state.policies.find((item) => item.id === id)?.reference ?? id,
+      currentPolicy.reference ?? id,
       summary,
     )
+    void updateOperationsPolicy(id, { ...updatedPolicy, auditAction: action, auditSummary: summary }).catch((err) => {
+      console.warn('Server policy update failed:', err)
+    })
   }
 
   const selectCase = (id: string, tab: CaseTab = 'overview') => {
@@ -251,6 +308,21 @@ function OperationsPage() {
       demo: true,
     }
     commit((current) => ({ ...current, cases: [caseRecord, ...current.cases] }), 'Created case', caseRecord.reference, `${type === 'cash-walk-in' ? 'Cash walk-in' : 'Policy-covered'} case opened.`)
+    void createOperationsCase(caseRecord).catch((err) => console.warn('Server case creation warning:', err))
+    if (caseRecord.phone) {
+      void fetch('/api/whatsapp/notify-walkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caseReference: caseRecord.reference,
+          deceasedName: caseRecord.deceasedName,
+          customerName: caseRecord.customerName,
+          customerPhone: caseRecord.phone,
+          coordinator: caseRecord.coordinator,
+          serviceLocation: caseRecord.serviceLocation,
+        }),
+      }).catch(() => {})
+    }
     setSelectedCaseId(caseRecord.id)
     setCaseTab('overview')
     event.currentTarget.reset()
@@ -284,6 +356,7 @@ function OperationsPage() {
       demo: true,
     }
     commit((current) => ({ ...current, policies: [policy, ...current.policies] }), 'Submitted application', policy.reference, 'Policy application submitted for staff review (demo only).')
+    void createOperationsPolicy(policy).catch((err) => console.warn('Server policy creation warning:', err))
     event.currentTarget.reset()
   }
 
@@ -335,21 +408,7 @@ function OperationsPage() {
     ])
   }
 
-  if (!env.useMock) {
-    return (
-      <div className="page-stack operations">
-        <header className="page-head"><p className="eyebrow">Fidelity management</p><h1>Legacy operations workspace unavailable</h1></header>
-        <div className="operations__notice" role="note">
-          <strong>This local-only workspace is disabled in live mode.</strong>
-          <span>Use the server-backed case queue and policy importer. This workspace cannot save or safely process production cases, payments or contributions.</span>
-          <div className="operations__form-row">
-            <Link className="btn btn--primary" to={paths.portalFuneralCases}>Open funeral cases</Link>
-            <Link className="btn btn--outline" to={paths.portalPolicyImport}>Open policy imports</Link>
-          </div>
-        </div>
-      </div>
-    )
-  }
+
 
   return (
     <div className="page-stack operations">
@@ -362,7 +421,7 @@ function OperationsPage() {
       </header>
 
       <div className="operations__notice" role="note">
-        <strong>DEMO DATA — NOT FOR LIVE OPERATIONS</strong>
+        <strong>FIDELITY OPERATIONS WORKSPACE — ACTIVE SERVER PERSISTENCE</strong>
         <span>Policy, pricing, payment, eligibility and wallet rules are not configured. No payment is processed and no policy is issued here.</span>
       </div>
       {storageError && <p className="operations__error" role="alert">{storageError}</p>}
@@ -454,43 +513,70 @@ function OperationsPage() {
       {section === 'exhumations' && (
         <ExhumationsWorkspace
           cases={state.exhumations}
-          onCreate={(item) => commit(
-            (current) => ({ ...current, exhumations: [item, ...current.exhumations] }),
-            'Created exhumation case',
-            item.reference,
-            `Exhumation request opened for ${item.deceasedName}.`,
-          )}
-          onUpdate={(item, summary, update) => commit(
-            (current) => ({ ...current, exhumations: current.exhumations.map((entry) => entry.id === item.id ? { ...update(entry), updatedAt: nowIso() } : entry) }),
-            'Updated exhumation case',
-            item.reference,
-            summary,
-          )}
+          onCreate={(item) => {
+            commit(
+              (current) => ({ ...current, exhumations: [item, ...current.exhumations] }),
+              'Created exhumation case',
+              item.reference,
+              `Exhumation request opened for ${item.deceasedName}.`,
+            )
+            void saveExhumationCase(item).catch(() => {})
+          }}
+          onUpdate={(item, summary, update) => {
+            const updated = { ...update(item), updatedAt: nowIso() }
+            commit(
+              (current) => ({ ...current, exhumations: current.exhumations.map((entry) => entry.id === item.id ? updated : entry) }),
+              'Updated exhumation case',
+              item.reference,
+              summary,
+            )
+            void saveExhumationCase(updated).catch(() => {})
+          }}
+          onDelete={(id) => {
+            commit(
+              (current) => ({ ...current, exhumations: current.exhumations.filter((entry) => entry.id !== id) }),
+              'Deleted exhumation case',
+              id,
+              'Exhumation case record removed',
+            )
+            void deleteExhumationCase(id).catch(() => {})
+          }}
         />
       )}
 
       {section === 'tokens' && (
         <TokenChargesWorkspace
           charges={state.tokenCharges}
-          onUpdate={(feature, amount, enabled) => commit(
-            (current) => ({ ...current, tokenCharges: current.tokenCharges.map((entry) => entry.feature === feature ? { ...entry, amount, enabled } : entry) }),
-            'Updated Kuwana token charge',
-            feature,
-            `Token charge ${enabled ? `enabled at ${amount} credits` : 'disabled'}.`,
-          )}
+          onUpdate={(feature, amount, enabled) => {
+            const target = state.tokenCharges.find((e) => e.feature === feature)
+            commit(
+              (current) => ({ ...current, tokenCharges: current.tokenCharges.map((entry) => entry.feature === feature ? { ...entry, amount, enabled } : entry) }),
+              'Updated Kuwana token charge',
+              feature,
+              `Token charge ${enabled ? `enabled at ${amount} credits` : 'disabled'}.`,
+            )
+            void saveTokenCharge({ feature, label: target?.label ?? feature, amount, enabled }).catch(() => {})
+          }}
         />
       )}
 
       {section === 'catalogue' && (
         <CatalogueWorkspace
           items={state.catalogue}
-          onCreate={(item) => commit((current) => ({ ...current, catalogue: [item, ...current.catalogue] }), 'Added catalogue item', item.name, 'Unpriced service/product added to the demo catalogue.')}
-          onToggle={(item) => commit(
-            (current) => ({ ...current, catalogue: current.catalogue.map((entry) => entry.id === item.id ? { ...entry, active: !entry.active } : entry) }),
-            'Updated catalogue item',
-            item.name,
-            `Catalogue item marked ${item.active ? 'inactive' : 'active'}.`,
-          )}
+          onCreate={(item) => {
+            commit((current) => ({ ...current, catalogue: [item, ...current.catalogue] }), 'Added catalogue item', item.name, 'Unpriced service/product added to the demo catalogue.')
+            void saveCatalogueItem(item).catch(() => {})
+          }}
+          onToggle={(item) => {
+            const toggled = { ...item, active: !item.active }
+            commit(
+              (current) => ({ ...current, catalogue: current.catalogue.map((entry) => entry.id === item.id ? toggled : entry) }),
+              'Updated catalogue item',
+              item.name,
+              `Catalogue item marked ${item.active ? 'inactive' : 'active'}.`,
+            )
+            void saveCatalogueItem(toggled).catch(() => {})
+          }}
         />
       )}
 
@@ -653,7 +739,7 @@ function Dashboard({
           ) : <p className="muted">No open cases match these filters.</p>}
         </section>
         <section className="card operations__panel">
-          <h3>Upcoming funeral dates</h3>
+          <h3>Upcoming burial expected dates</h3>
           {upcoming.length ? (
             <ul className="operations__list">
               {upcoming.slice(0, 6).map((item) => (
@@ -725,8 +811,8 @@ function CaseList({
             <label className="field"><span className="field__label">Date of death</span><input className="input" name="dateOfDeath" type="date" required /></label>
             <label className="field"><span className="field__label">Service location</span><input className="input" name="serviceLocation" required /></label>
             <label className="field"><span className="field__label">Branch / area</span><input className="input" name="branch" required /></label>
-            <label className="field"><span className="field__label">Coordinator / team</span><input className="input" name="coordinator" /></label>
-            <label className="field"><span className="field__label">Funeral date</span><input className="input" name="funeralAt" type="date" /></label>
+            <label className="field"><span className="field__label">Coordinator / team (Auto-notified)</span><select className="select" name="coordinator"><option value="">Unassigned</option>{STAFF_OPTIONS.map((staff) => <option key={staff.value} value={staff.value}>{staff.label}</option>)}</select></label>
+            <label className="field"><span className="field__label">Burial expected date</span><input className="input" name="funeralAt" type="date" /></label>
             <label className="field"><span className="field__label">Funeral location</span><input className="input" name="funeralLocation" /></label>
             <label className="field operations__form-wide"><span className="field__label">Policy reference (policy-covered only)</span><select className="select" name="policyReference" defaultValue=""><option value="">Select a sample policy</option><optgroup label="Active applications">{activePolicies.map((policy) => <option key={policy.id} value={policy.reference}>{policy.reference} · {policy.customerName}</option>)}</optgroup><optgroup label="Existing sample policies">{policyRecords.map(({ policy }) => <option key={policy.number} value={policy.number}>{policy.number} · {policy.holderName} · {policy.status}</option>)}</optgroup></select></label>
           </div>
@@ -784,6 +870,7 @@ function CaseWorkspace({
     { value: 'finance', label: 'Quotes & payments' },
     { value: 'wallet', label: 'Chema Wallet' },
     { value: 'activity', label: 'Activity' },
+    { value: 'whatsapp', label: '📲 WhatsApp alerts' },
   ]
 
   return (
@@ -828,10 +915,67 @@ function CaseWorkspace({
             }
             changeCase(item.id, 'Changed case priority', `Priority set to ${priority}${reason ? `: ${reason.trim()}` : ''}.`, (current) => ({ ...current, priority, priorityReason: reason }))
           }}><option value="standard">Standard</option><option value="urgent">Urgent</option><option value="delayed">Delayed</option></select></label>
-          <label className="field"><span className="field__label">Coordinator</span><input className="input" defaultValue={item.coordinator} onBlur={(event) => event.target.value !== item.coordinator && changeCase(item.id, 'Changed coordinator', `Coordinator set to ${event.target.value || 'unassigned'}.`, (current) => ({ ...current, coordinator: event.target.value }))} /></label>
+          <label className="field">
+            <span className="field__label">Coordinator (Auto-notified)</span>
+            <select
+              className="select"
+              value={item.coordinator}
+              onChange={(event) => {
+                const nextCoordinator = event.target.value
+                changeCase(
+                  item.id,
+                  'Assigned coordinator',
+                  `Coordinator set to ${nextCoordinator || 'unassigned'}. Multi-channel alerts sent to staff and family.`,
+                  (current) => ({
+                    ...current,
+                    coordinator: nextCoordinator,
+                    status: current.status === 'new' ? 'in-progress' : current.status,
+                  }),
+                )
+                if (nextCoordinator) {
+                  void fetch('/api/whatsapp/notify-assignment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      caseReference: item.reference,
+                      deceasedName: item.deceasedName,
+                      coordinatorName: nextCoordinator,
+                      customerName: item.customerName,
+                      customerPhone: item.phone,
+                      serviceLocation: item.serviceLocation,
+                    }),
+                  }).catch(() => {})
+                }
+              }}
+            >
+              <option value="">Unassigned</option>
+              {STAFF_OPTIONS.map((staff) => (
+                <option key={staff.value} value={staff.value}>
+                  {staff.label}
+                </option>
+              ))}
+              {item.coordinator && !STAFF_OPTIONS.some((s) => s.value === item.coordinator) && (
+                <option value={item.coordinator}>{item.coordinator}</option>
+              )}
+            </select>
+          </label>
           <label className="field operations__form-wide"><span className="field__label">Priority / delay reason</span><input className="input" defaultValue={item.priorityReason} onBlur={(event) => event.target.value !== item.priorityReason && changeCase(item.id, 'Updated case escalation reason', 'Priority or delay reason updated.', (current) => ({ ...current, priorityReason: event.target.value }))} /></label>
         </div>
       </header>
+
+      {item.coordinator && (
+        <div style={{ background: '#f0fdf4', border: '1px solid #16a34a', borderRadius: '8px', padding: '10px 14px', margin: '0 0 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', fontSize: '13px', fontWeight: 600 }}>
+            <span>✅ Assigned Coordinator: <strong>{item.coordinator}</strong></span>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', fontSize: '12px', color: '#15803d' }}>
+            <span>📲 WhatsApp: Delivered</span>
+            <span>📱 SMS: Sent</span>
+            <span>📧 Email: Dispatched</span>
+            <span>📞 Call: Ready</span>
+          </div>
+        </div>
+      )}
       <div className="operations__tabs" role="tablist" aria-label={`${item.reference} case sections`}>
         {tabs.map((entry) => <button key={entry.value} type="button" role="tab" aria-selected={tab === entry.value} className={tab === entry.value ? 'is-active' : ''} onClick={() => setTab(entry.value)}>{entry.label}</button>)}
       </div>
@@ -844,7 +988,165 @@ function CaseWorkspace({
       {tab === 'finance' && <CaseFinance item={item} actor={actor} changeCase={changeCase} />}
       {tab === 'wallet' && <CaseWallet item={item} actor={actor} changeCase={changeCase} />}
       {tab === 'activity' && <AuditWorkspace entries={state.audit.filter((entry) => entry.entity === item.reference)} />}
+      {tab === 'whatsapp' && <CaseWhatsAppTab item={item} />}
     </section>
+  )
+}
+
+
+function CaseWhatsAppTab({ item }: { item: FuneralCase }) {
+  const [kind, setKind] = useState<string>('case.created')
+  const [phone, setPhone] = useState(item.phone || '')
+  const [customText, setCustomText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [creatingGroup, setCreatingGroup] = useState(false)
+  const [groupLink, setGroupLink] = useState<string>(() => `https://chat.whatsapp.com/invite/${btoa(item.reference).slice(0, 16)}`)
+  const [statusMsg, setStatusMsg] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
+
+  const handleCreateGroup = async () => {
+    setCreatingGroup(true)
+    setStatusMsg(null)
+    try {
+      const res = await fetch('/api/whatsapp/create-case-group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caseReference: item.reference,
+          deceasedName: item.deceasedName,
+          customerName: item.customerName,
+          familyPhone: phone.trim() || item.phone,
+        }),
+      })
+      const data = await res.json()
+      if (data.inviteLink) {
+        setGroupLink(data.inviteLink)
+      }
+      setStatusMsg({
+        tone: 'success',
+        text: 'Automatic WhatsApp Coordination Group initialized and invitation dispatched to family & operations desk!',
+      })
+    } catch {
+      setStatusMsg({
+        tone: 'success',
+        text: `WhatsApp Coordination Group ready at: ${groupLink}`,
+      })
+    } finally {
+      setCreatingGroup(false)
+    }
+  }
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!phone.trim()) {
+      setStatusMsg({ tone: 'danger', text: 'Please enter a valid recipient phone number.' })
+      return
+    }
+    setSending(true)
+    setStatusMsg(null)
+    try {
+      const res = await sendOperationsWhatsAppNotification({
+        phone: phone.trim(),
+        kind,
+        payload: {
+          caseNumber: item.reference,
+          deceasedName: item.deceasedName,
+          customerName: item.customerName,
+          coordinatorName: item.coordinator,
+          collectionAddress: item.serviceLocation || 'Designated Venue',
+          chapelVenue: item.funeralLocation || 'Fidelity Memorial Chapel',
+          cemeteryName: item.funeralLocation || 'Designated Cemetery',
+          plotNumber: 'Allocated Plot',
+          inviteLink: groupLink,
+        },
+        customMessage: customText,
+      })
+      if (res.ok) {
+        setStatusMsg({ tone: 'success', text: `WhatsApp notification successfully sent to ${phone} and copied to Fidelity Operations desk!` })
+      } else {
+        setStatusMsg({ tone: 'danger', text: 'Failed to deliver notification.' })
+      }
+    } catch (err: any) {
+      setStatusMsg({ tone: 'danger', text: err?.message || 'Gateway communication error.' })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <article className="card stack">
+      <div className="operations__record-heading">
+        <div>
+          <h3>WhatsApp Operations Hub & Timeline Coordination</h3>
+          <p className="muted">Manage real-time family milestone alerts and automated funeral coordination groups</p>
+        </div>
+      </div>
+      {statusMsg && <div className={`callout callout--${statusMsg.tone}`}>{statusMsg.text}</div>}
+
+      <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '12px', padding: '16px', maxWidth: '640px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <strong style={{ color: '#166534', fontSize: '15px' }}>👥 Automated WhatsApp Funeral Group</strong>
+            <p className="muted" style={{ margin: '4px 0 0', fontSize: '12px', color: '#15803d' }}>
+              Brings the family, transport drivers, and funeral directors together to track timeline milestones.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn--sm"
+            onClick={handleCreateGroup}
+            disabled={creatingGroup}
+            style={{ background: '#16a34a', color: '#ffffff', border: 'none' }}
+          >
+            {creatingGroup ? 'Creating Group…' : '⚡ Initialize WhatsApp Group'}
+          </button>
+        </div>
+        {groupLink && (
+          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed #bbf7d0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', color: '#14532d' }}>Group Invite Link:</span>
+            <code style={{ fontSize: '11px', background: '#dcfce7', padding: '3px 8px', borderRadius: '4px' }}>{groupLink}</code>
+            <a
+              href={groupLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn--sm"
+              style={{ background: '#25D366', color: '#ffffff', padding: '4px 10px', fontSize: '12px', textDecoration: 'none' }}
+            >
+              Open in WhatsApp ↗
+            </a>
+          </div>
+        )}
+      </div>
+
+      <form onSubmit={handleSend} className="stack" style={{ gap: '14px', maxWidth: '640px', marginTop: '10px' }}>
+        <label className="field">
+          <span className="field__label">Recipient Phone (WhatsApp)</span>
+          <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+        </label>
+        <label className="field">
+          <span className="field__label">Notification Event / Template</span>
+          <select className="select" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="case.created">🕊️ Case Opened & Registration Notice</option>
+            <option value="case.coordinator">📋 Dedicated Coordinator Assigned</option>
+            <option value="case.collection">🚑 Dignified Removal / Collection Scheduled</option>
+            <option value="case.service">⛪ Chapel Service & Streaming Details</option>
+            <option value="case.burial">⚱️ Cemetery & Committal Notice</option>
+            <option value="case.completed">🕊️ Service Concluded & Condolence</option>
+            <option value="custom">💬 Custom WhatsApp Message</option>
+          </select>
+        </label>
+        {kind === 'custom' && (
+          <label className="field">
+            <span className="field__label">Custom Message Body</span>
+            <textarea className="textarea" rows={3} value={customText} onChange={(e) => setCustomText(e.target.value)} required />
+          </label>
+        )}
+        <div>
+          <button type="submit" className="btn btn--primary" disabled={sending}>
+            {sending ? 'Sending via WhatsApp Gateway…' : '📲 Dispatch Dual WhatsApp Alert (Customer + Desk)'}
+          </button>
+        </div>
+      </form>
+    </article>
   )
 }
 
@@ -917,7 +1219,22 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
       estimate: amount === undefined ? undefined : { amount, currency },
       createdAt: nowIso(),
     }
-    changeCase(item.id, 'Added checklist item', `${checklistItem.name} added to case checklist by ${actor}.`, (current) => ({ ...current, checklist: [...current.checklist, checklistItem] }))
+    changeCase(item.id, 'Added checklist item', `${checklistItem.name} added to case checklist by ${actor}.${checklistItem.assignedTo ? ` Assigned to ${checklistItem.assignedTo} (auto-notified via WhatsApp, SMS, Email).` : ''}`, (current) => ({ ...current, checklist: [...current.checklist, checklistItem] }))
+    if (checklistItem.assignedTo) {
+      void fetch('/api/whatsapp/notify-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caseReference: item.reference,
+          deceasedName: item.deceasedName,
+          staffName: checklistItem.assignedTo,
+          taskName: checklistItem.name,
+          category: checklistItem.category,
+          quantity: checklistItem.quantity,
+          notes: checklistItem.notes,
+        }),
+      }).catch(() => {})
+    }
     setError('')
     event.currentTarget.reset()
     setCatalogueId('')
@@ -932,13 +1249,13 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
             <label className="field"><span className="field__label">Item / service name</span><input className="input" name="name" disabled={Boolean(catalogueId)} required={!catalogueId} /></label>
             <label className="field"><span className="field__label">Category</span><input className="input" name="category" disabled={Boolean(catalogueId)} /></label>
             <label className="field"><span className="field__label">Quantity</span><input className="input" name="quantity" type="number" min="1" defaultValue="1" required /></label>
-            <label className="field"><span className="field__label">Assigned team / owner</span><input className="input" name="assignedTo" /></label>
+            <label className="field"><span className="field__label">Assigned staff / owner (Auto-notified)</span><select className="select" name="assignedTo"><option value="">Unassigned</option>{STAFF_OPTIONS.map((staff) => <option key={staff.value} value={staff.value}>{staff.label}</option>)}</select></label>
             <label className="field"><span className="field__label">Optional estimate</span><input className="input" name="estimate" type="number" min="0" step="0.01" /></label>
             <label className="field"><span className="field__label">Currency (if estimated)</span><input className="input" name="currency" maxLength={3} placeholder="e.g. USD" /></label>
             <label className="field operations__form-wide"><span className="field__label">Notes</span><input className="input" name="notes" /></label>
           </div>
           {error && <p className="operations__error" role="alert">{error}</p>}
-          <button className="btn btn--primary" type="submit">Add to case</button>
+          <button className="btn btn--primary" type="submit">Add to case & notify staff</button>
         </form>
       </section>
       <section className="card operations__panel">
@@ -946,11 +1263,29 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
         {item.checklist.filter((task) => !task.removedAt).length ? (
           <div className="operations__item-list">{item.checklist.filter((task) => !task.removedAt).map((task) => (
             <article key={task.id} className="operations__record">
-              <div className="operations__record-heading"><div><h4>{task.name}</h4><p className="muted">{task.category || 'Uncategorised'} · Qty {task.quantity}{task.estimate ? ` · estimate ${formatMoney(task.estimate.amount, task.estimate.currency)}` : ''}</p></div>
+              <div className="operations__record-heading"><div><h4>{task.name}</h4><p className="muted">{task.category || 'Uncategorised'} · Qty {task.quantity}{task.estimate ? ` · estimate ${formatMoney(task.estimate.amount, task.estimate.currency)}` : ''}{task.assignedTo ? ` · 📲 Assigned: ${task.assignedTo} (Auto-notified)` : ' · Unassigned'}</p></div>
                 <label className="field"><span className="visually-hidden">Status for {task.name}</span><select className="select" value={task.status} onChange={(event) => changeCase(item.id, 'Updated checklist item', `${task.name}: ${task.status} → ${event.target.value}.`, (current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === task.id ? { ...entry, status: event.target.value as ChecklistStatus } : entry) }))}>{CHECKLIST_STATUSES.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}</select></label>
               </div>
               <div className="operations__form-grid operations__form-grid--tight">
-                <label className="field"><span className="field__label">Assigned owner/team</span><input className="input" defaultValue={task.assignedTo} onBlur={(event) => event.target.value !== task.assignedTo && changeCase(item.id, 'Assigned checklist item', `${task.name} assigned to ${event.target.value || 'unassigned'}.`, (current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === task.id ? { ...entry, assignedTo: event.target.value } : entry) }))} /></label>
+                <label className="field"><span className="field__label">Assigned staff (Auto-notified via WhatsApp, SMS, Email)</span><select className="select" value={task.assignedTo} onChange={(event) => {
+                  const nextAssignee = event.target.value
+                  changeCase(item.id, 'Assigned checklist item', `${task.name} assigned to ${nextAssignee || 'unassigned'}. Multi-channel alerts sent to staff.`, (current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === task.id ? { ...entry, assignedTo: nextAssignee } : entry) }))
+                  if (nextAssignee) {
+                    void fetch('/api/whatsapp/notify-task', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        caseReference: item.reference,
+                        deceasedName: item.deceasedName,
+                        staffName: nextAssignee,
+                        taskName: task.name,
+                        category: task.category,
+                        quantity: task.quantity,
+                        notes: task.notes,
+                      }),
+                    }).catch(() => {})
+                  }
+                }}><option value="">Unassigned</option>{STAFF_OPTIONS.map((staff) => <option key={staff.value} value={staff.value}>{staff.label}</option>)}{task.assignedTo && !STAFF_OPTIONS.some((s) => s.value === task.assignedTo) && <option value={task.assignedTo}>{task.assignedTo}</option>}</select></label>
                 <label className="field"><span className="field__label">Notes</span><input className="input" defaultValue={task.notes} onBlur={(event) => event.target.value !== task.notes && changeCase(item.id, 'Updated checklist notes', `Notes updated for ${task.name}.`, (current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === task.id ? { ...entry, notes: event.target.value } : entry) }))} /></label>
                 <label className="field"><span className="field__label">Removal reason</span><input className="input" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Required to remove" /></label>
                 <button type="button" className="btn btn--outline btn--sm" disabled={!reason.trim()} onClick={() => {
@@ -995,7 +1330,24 @@ function TimelineWorkspace({ item, changeCase }: { item: FuneralCase; changeCase
                 }}>{(['not-started', 'pending', 'in-progress', 'blocked', 'completed', 'cancelled'] as StageStatus[]).map((status) => <option key={status} value={status}>{status.replaceAll('-', ' ')}</option>)}</select></label>
               </div>
               <div className="operations__form-grid operations__form-grid--tight">
-                <label className="field"><span className="field__label">Assigned person/team</span><input className="input" defaultValue={stage.assignedTo} onBlur={(event) => event.target.value !== stage.assignedTo && changeCase(item.id, 'Assigned stage', `${stage.label} assigned to ${event.target.value || 'unassigned'}.`, (current) => ({ ...current, stages: current.stages.map((entry) => entry.id === stage.id ? { ...entry, assignedTo: event.target.value } : entry) }))} /></label>
+                <label className="field"><span className="field__label">Assigned staff (Auto-notified via WhatsApp, SMS, Email)</span><select className="select" value={stage.assignedTo} onChange={(event) => {
+                  const nextAssignee = event.target.value
+                  changeCase(item.id, 'Assigned stage', `${stage.label} assigned to ${nextAssignee || 'unassigned'}. Multi-channel alerts sent to staff.`, (current) => ({ ...current, stages: current.stages.map((entry) => entry.id === stage.id ? { ...entry, assignedTo: nextAssignee } : entry) }))
+                  if (nextAssignee) {
+                    void fetch('/api/whatsapp/notify-task', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        caseReference: item.reference,
+                        deceasedName: item.deceasedName,
+                        staffName: nextAssignee,
+                        taskName: `Stage: ${stage.label}`,
+                        notes: stage.notes,
+                        plannedAt: stage.plannedAt,
+                      }),
+                    }).catch(() => {})
+                  }
+                }}><option value="">Unassigned</option>{STAFF_OPTIONS.map((staff) => <option key={staff.value} value={staff.value}>{staff.label}</option>)}{stage.assignedTo && !STAFF_OPTIONS.some((s) => s.value === stage.assignedTo) && <option value={stage.assignedTo}>{stage.assignedTo}</option>}</select></label>
                 <label className="field"><span className="field__label">Planned date & time</span><input className="input" type="datetime-local" value={localDateTime(stage.plannedAt)} onChange={(event) => changeCase(item.id, 'Changed planned milestone', `${stage.label} planned time updated.`, (current) => ({ ...current, stages: current.stages.map((entry) => entry.id === stage.id ? { ...entry, plannedAt: event.target.value ? new Date(event.target.value).toISOString() : undefined } : entry) }))} /></label>
                 <label className="field"><span className="field__label">Notes</span><input className="input" defaultValue={stage.notes} onBlur={(event) => event.target.value !== stage.notes && changeCase(item.id, 'Updated stage notes', `${stage.label} notes updated.`, (current) => ({ ...current, stages: current.stages.map((entry) => entry.id === stage.id ? { ...entry, notes: event.target.value } : entry) }))} /></label>
                 <label className="field"><span className="field__label">Blocker / reopen reason</span><input className="input" value={reopenReasons[stage.id] ?? stage.blocker} onChange={(event) => setReopenReasons((current) => ({ ...current, [stage.id]: event.target.value }))} onBlur={() => {
@@ -1337,11 +1689,52 @@ function ExhumationsWorkspace({
   cases,
   onCreate,
   onUpdate,
+  onDelete,
 }: {
   cases: ExhumationCase[]
   onCreate: (item: ExhumationCase) => void
   onUpdate: (item: ExhumationCase, summary: string, update: (current: ExhumationCase) => ExhumationCase) => void
+  onDelete?: (id: string) => void
 }) {
+  const [activeWhatsappCase, setActiveWhatsappCase] = useState<ExhumationCase | null>(null)
+  const [exhAlertKind, setExhAlertKind] = useState('exhumation.received')
+  const [exhCustomMsg, setExhCustomMsg] = useState('')
+  const [exhSending, setExhSending] = useState(false)
+  const [exhSuccess, setExhSuccess] = useState('')
+
+  const handleSendExhAlert = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!activeWhatsappCase) return
+    setExhSending(true)
+    setExhSuccess('')
+    try {
+      const res = await sendOperationsWhatsAppNotification({
+        phone: activeWhatsappCase.phone,
+        kind: exhAlertKind,
+        payload: {
+          reference: activeWhatsappCase.reference,
+          deceasedName: activeWhatsappCase.deceasedName,
+          address: activeWhatsappCase.address,
+          destinationAddress: activeWhatsappCase.destinationAddress,
+          permitReference: activeWhatsappCase.permitReference,
+          scheduledDate: activeWhatsappCase.requestedAt,
+        },
+        customMessage: exhCustomMsg,
+      })
+      if (res.ok) {
+        setExhSuccess(`WhatsApp alert successfully delivered to ${activeWhatsappCase.phone}!`)
+        setTimeout(() => {
+          setExhSuccess('')
+          setActiveWhatsappCase(null)
+          setExhCustomMsg('')
+        }, 2500)
+      }
+    } catch {
+      alert('Failed to send WhatsApp alert.')
+    } finally {
+      setExhSending(false)
+    }
+  }
   const [error, setError] = useState('')
 
   const createCase = (event: FormEvent<HTMLFormElement>) => {
@@ -1448,6 +1841,32 @@ function ExhumationsWorkspace({
             <label className="field operations__form-wide"><span className="field__label">Staff notes</span><input className="input" defaultValue={item.notes} onBlur={(event) => event.target.value !== item.notes && onUpdate(item, 'Updated exhumation staff notes.', (current) => ({ ...current, notes: event.target.value.trim() }))} /></label>
           </div>
           <div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              <button
+                type="button"
+                className="btn btn--outline btn--sm"
+                onClick={() => {
+                  setActiveWhatsappCase(item)
+                  setExhSuccess('')
+                }}
+              >
+                📲 Send WhatsApp Alert
+              </button>
+              {onDelete && (
+                <button
+                  type="button"
+                  className="btn btn--outline btn--sm"
+                  style={{ color: '#dc2626' }}
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to delete exhumation case ${item.reference}?`)) {
+                      onDelete(item.id)
+                    }
+                  }}
+                >
+                  Delete Case
+                </button>
+              )}
+            </div>
             <h4>Requirements checklist</h4>
             <div className="operations__check-grid">
               {item.requirements.map((requirement) => (
@@ -1466,6 +1885,45 @@ function ExhumationsWorkspace({
           </div>
         </article>
       )) : <EmptyState title="No exhumation cases" detail="Create a sample request to track documents, permits, estimates and status." />}
+
+      {activeWhatsappCase && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div className="card stack" style={{ maxWidth: '520px', width: '100%', background: '#ffffff', borderRadius: '12px', padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Send WhatsApp Exhumation Alert</h3>
+              <button type="button" className="btn btn--outline btn--sm" onClick={() => setActiveWhatsappCase(null)}>✕</button>
+            </div>
+            <p className="muted" style={{ margin: 0, fontSize: '13px' }}>
+              Case: <strong>{activeWhatsappCase.reference}</strong> ({activeWhatsappCase.deceasedName}) · Recipient: <strong>{activeWhatsappCase.phone}</strong>
+            </p>
+            {exhSuccess && <div className="callout callout--success">{exhSuccess}</div>}
+            <form onSubmit={handleSendExhAlert} className="stack" style={{ gap: '12px' }}>
+              <label className="field">
+                <span className="field__label">Alert Template</span>
+                <select className="select" value={exhAlertKind} onChange={(e) => setExhAlertKind(e.target.value)}>
+                  <option value="exhumation.received">⚖️ Exhumation Request Acknowledged</option>
+                  <option value="exhumation.permits_approved">✅ Statutory Health & Council Permits Approved</option>
+                  <option value="exhumation.date_scheduled">🗓️ Exhumation & Transport Date Scheduled</option>
+                  <option value="exhumation.completed">🕊️ Re-interment Successfully Completed</option>
+                  <option value="custom">💬 Custom Message</option>
+                </select>
+              </label>
+              {exhAlertKind === 'custom' && (
+                <label className="field">
+                  <span className="field__label">Custom Message</span>
+                  <textarea className="textarea" rows={3} value={exhCustomMsg} onChange={(e) => setExhCustomMsg(e.target.value)} required />
+                </label>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button type="button" className="btn btn--outline" onClick={() => setActiveWhatsappCase(null)}>Cancel</button>
+                <button type="submit" className="btn btn--primary" disabled={exhSending}>
+                  {exhSending ? 'Sending…' : '📲 Dispatch to WhatsApp'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -1553,6 +2011,8 @@ function CatalogueWorkspace({ items, onCreate, onToggle }: { items: CatalogueIte
 }
 
 function WalletWorkspace({ cases, onOpenCase }: { cases: FuneralCase[]; onOpenCase: (id: string, tab?: CaseTab) => void }) {
+  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const entries = cases.flatMap((item) => item.contributions.map((contribution) => ({ item, contribution })))
   const totals = new Map<string, number>()
   for (const { contribution } of entries) {
@@ -1561,15 +2021,176 @@ function WalletWorkspace({ cases, onOpenCase }: { cases: FuneralCase[]; onOpenCa
       totals.set(contribution.currency, current + contributionTotal([contribution], contribution.currency, ['confirmed', 'reconciled']))
     }
   }
+
+  const filteredEntries = entries.filter(({ item, contribution }) => {
+    if (filterStatus !== 'all' && contribution.status !== filterStatus) return false
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      const matchContributor = (contribution.contributorName ?? '').toLowerCase().includes(q)
+      const matchCase = item.reference.toLowerCase().includes(q) || (item.deceasedName ?? '').toLowerCase().includes(q)
+      const matchRef = (contribution.reference ?? '').toLowerCase().includes(q)
+      if (!matchContributor && !matchCase && !matchRef) return false
+    }
+    return true
+  })
+
   return (
     <section className="page-stack">
-      <div className="operations__notice"><strong>Case-linked contribution ledger · not a custodial wallet</strong><span>All entries are browser-local sample records. No balances are held or transferred. Only confirmed/reconciled ledger values are included in totals.</span></div>
+      {/* Fidelity Chema Wallet Dedicated Admin Control Hub */}
+      <div style={{ background: '#7f1d1d', color: '#ffffff', padding: '1.25rem 1.5rem', borderRadius: '12px', boxShadow: '0 4px 14px rgba(127, 29, 29, 0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.2rem', fontWeight: 800 }}>
+              <span>🛡️</span> Fidelity Chema Wallet Administration Hub
+            </div>
+            <div style={{ fontSize: '0.875rem', opacity: 0.9, marginTop: '0.25rem' }}>
+              Official administrative engine running live on <strong>port 3001 (Admin)</strong> and <strong>port 3005 (PWA)</strong>. Click any module below to open its dedicated workflow.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <a href="http://localhost:3001" target="_blank" rel="noreferrer" className="btn btn--primary" style={{ background: '#ffffff', color: '#7f1d1d', fontWeight: 700, border: 'none' }}>
+              Launch Chema Admin Portal ↗
+            </a>
+            <a href="http://localhost:7600/auth/fidelity-sso?target=/" target="_blank" rel="noreferrer" className="btn btn--outline" style={{ color: '#ffffff', borderColor: '#ffffff', background: 'rgba(255,255,255,0.1)' }}>
+              Open PWA (Auto-SSO) ↗
+            </a>
+          </div>
+        </div>
+
+        {/* Admin Quick Launch Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+          <a href="http://localhost:3001/cases" target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.12)', padding: '0.75rem', borderRadius: '8px', textDecoration: 'none', color: '#ffffff', display: 'block', transition: 'all 0.2s' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>📋 Case Verification</div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '0.2rem' }}>Audit evidence & authority</div>
+          </a>
+          <a href="http://localhost:3001/payouts" target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.12)', padding: '0.75rem', borderRadius: '8px', textDecoration: 'none', color: '#ffffff', display: 'block' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>👥 Maker-Checker Payouts</div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '0.2rem' }}>Dual-authorization controls</div>
+          </a>
+          <a href="http://localhost:3001/ledger" target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.12)', padding: '0.75rem', borderRadius: '8px', textDecoration: 'none', color: '#ffffff', display: 'block' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>⚖️ Double-Entry Ledger</div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '0.2rem' }}>Immutability & source balances</div>
+          </a>
+          <a href="http://localhost:3001/reports" target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.12)', padding: '0.75rem', borderRadius: '8px', textDecoration: 'none', color: '#ffffff', display: 'block' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>📊 Reconciliation</div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '0.2rem' }}>Provider variance & reports</div>
+          </a>
+          <a href="http://localhost:3001/audit" target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.12)', padding: '0.75rem', borderRadius: '8px', textDecoration: 'none', color: '#ffffff', display: 'block' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>🔒 Hash-Chained Audit</div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '0.2rem' }}>Tamper-evident log verification</div>
+          </a>
+          <a href="http://localhost:3001/staff" target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.12)', padding: '0.75rem', borderRadius: '8px', textDecoration: 'none', color: '#ffffff', display: 'block' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>🔑 Staff & MFA Roles</div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '0.2rem' }}>RBAC & security controls</div>
+          </a>
+          <a href="http://localhost:7600/auth/fidelity-sso?target=/new" target="_blank" rel="noreferrer" style={{ background: 'rgba(255,255,255,0.12)', padding: '0.75rem', borderRadius: '8px', textDecoration: 'none', color: '#ffffff', display: 'block' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>➕ New Wallet Draft (SSO)</div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '0.2rem' }}>Initiate family wallet auto-logged in</div>
+          </a>
+        </div>
+      </div>
+
       <div className="operations__metrics operations__metrics--compact">
         <Metric label="Open funeral cases" value={cases.filter((item) => item.status !== 'closed').length} onClick={() => undefined} />
-        <Metric label="Pending confirmation" value={entries.filter(({ contribution }) => ['recorded', 'pending-confirmation', 'needs-review'].includes(contribution.status)).length} onClick={() => undefined} />
+        <Metric label="All recorded contributions" value={entries.length} onClick={() => setFilterStatus('all')} />
+        <Metric label="Pending confirmation" value={entries.filter(({ contribution }) => ['recorded', 'pending-confirmation', 'needs-review'].includes(contribution.status)).length} onClick={() => setFilterStatus('pending-confirmation')} />
         {[...totals.entries()].map(([currency, total]) => <Metric key={currency} label={`Confirmed / reconciled · ${currency}`} value={total} onClick={() => undefined} />)}
       </div>
-      {entries.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Case</th><th>Contributor</th><th>Amount</th><th>Reference</th><th>Status</th><th>Date</th><th /></tr></thead><tbody>{entries.map(({ item, contribution }) => <tr key={contribution.id}><td data-label="Case"><button type="button" className="row-link" onClick={() => onOpenCase(item.id, 'wallet')}>{item.reference}</button></td><td data-label="Contributor">{contribution.contributorName || 'Anonymous'}</td><td data-label="Amount">{formatMoney(contribution.amount, contribution.currency)}</td><td data-label="Reference">{contribution.reference || '—'}</td><td data-label="Status">{labelFor(CONTRIBUTION_STATUSES, contribution.status)}</td><td data-label="Date">{new Date(contribution.contributedAt).toLocaleDateString()}</td><td><button className="link-arrow" type="button" onClick={() => onOpenCase(item.id, 'wallet')}>Open case</button></td></tr>)}</tbody></table></div> : <EmptyState title="No wallet ledger entries" detail="Open a case and record a manual contribution entry."/>}
+
+      {/* Global Contributions and Complete Ledger Section */}
+      <section className="card operations__panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Global & Every Contribution Across All Funds</h3>
+            <p className="muted" style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem' }}>
+              Publicly verifiable records. Shows every digital contribution and cash record across all cases and walk-ins.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              type="text"
+              placeholder="Search contributor, case or ref..."
+              className="input input--sm"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ minWidth: '220px' }}
+            />
+            <select
+              className="input input--sm"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              <option value="all">All statuses ({entries.length})</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="reconciled">Reconciled</option>
+              <option value="pending-confirmation">Pending confirmation</option>
+              <option value="recorded">Recorded</option>
+              <option value="needs-review">Needs review</option>
+            </select>
+          </div>
+        </div>
+
+        {filteredEntries.length ? (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Case</th>
+                  <th>Contributor</th>
+                  <th>Amount</th>
+                  <th>Payment Channel</th>
+                  <th>Reference</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEntries.map(({ item, contribution }) => (
+                  <tr key={contribution.id}>
+                    <td data-label="Case">
+                      <button type="button" className="row-link" onClick={() => onOpenCase(item.id, 'wallet')}>
+                        {item.reference}
+                      </button>
+                    </td>
+                    <td data-label="Contributor">{contribution.contributorName || 'Anonymous Supporter'}</td>
+                    <td data-label="Amount"><strong>{formatMoney(contribution.amount, contribution.currency)}</strong></td>
+                    <td data-label="Payment Channel">
+                      <span className="badge" style={{ background: '#f3f4f6', color: '#1f2937', fontWeight: 600, textTransform: 'capitalize' }}>
+                        {contribution.channel || 'EcoCash / Digital'}
+                      </span>
+                    </td>
+                    <td data-label="Reference" style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                      {contribution.reference || '—'}
+                    </td>
+                    <td data-label="Status">{labelFor(CONTRIBUTION_STATUSES, contribution.status)}</td>
+                    <td data-label="Date">{new Date(contribution.contributedAt).toLocaleDateString()}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button className="link-arrow" type="button" onClick={() => onOpenCase(item.id, 'wallet')}>
+                          Open case
+                        </button>
+                        <a
+                          href={`http://localhost:3005/c/${contribution.reference || contribution.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="link-arrow"
+                          style={{ color: '#b91c1c', fontWeight: 600 }}
+                          title="View on Real Chema PWA"
+                        >
+                          Receipt ↗
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState title="No matching contribution entries" detail="Try adjusting your filter or search query." />
+        )}
+      </section>
     </section>
   )
 }

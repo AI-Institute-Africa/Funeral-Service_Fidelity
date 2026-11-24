@@ -50,8 +50,12 @@ export default function OrderPage() {
 function OrderView({ order }: { order: Order }) {
   const [params] = useSearchParams()
   const justPlaced = params.get('placed') === '1'
-  const status = orderStatusDisplay[order.status]
-  const paid = order.payment.status === 'paid'
+  const status = orderStatusDisplay[order.status] ?? { label: order.status || 'Order', tone: 'neutral' as const }
+  const paid = order.payment?.status === 'paid'
+  const lines = order.lines ?? []
+  const events = order.events ?? []
+  const delivery = order.delivery
+  const payment = order.payment
 
   return (
     <div className="page-stack">
@@ -76,7 +80,7 @@ function OrderView({ order }: { order: Order }) {
         </div>
       )}
 
-      {needsPayment(order) || order.payment.status === 'pending' ? (
+      {needsPayment(order) || payment?.status === 'pending' ? (
         <div className="reveal" style={{ '--i': 1 } as React.CSSProperties}>
           <PaymentPanel order={order} />
         </div>
@@ -87,8 +91,8 @@ function OrderView({ order }: { order: Order }) {
           </h2>
           <OrderTracker status={order.status} />
           <ol className="events">
-            {[...order.events].reverse().map((event) => (
-              <li key={`${event.at}-${event.label}`}>
+            {[...events].reverse().map((event, idx) => (
+              <li key={`${event.at}-${idx}`}>
                 <span className="events__label">{event.label}</span>
                 <time dateTime={event.at}>{formatServiceTime(event.at)}</time>
               </li>
@@ -102,76 +106,88 @@ function OrderView({ order }: { order: Order }) {
           What you ordered
         </h2>
         <SummaryRows
-          rows={order.lines.map((line, index) => ({ key: `${line.itemId}-${index}`, ...line, accent: '✦' }))}
-          subtotal={order.subtotal}
-          deliveryFee={order.deliveryFee}
-          total={order.total}
+          rows={lines.map((line, index) => ({ key: `${line.itemId}-${index}`, ...line, accent: '✦' }))}
+          subtotal={order.subtotal ?? 0}
+          deliveryFee={order.deliveryFee ?? 0}
+          total={order.total ?? 0}
         />
       </section>
 
       <div className="order-details reveal" style={{ '--i': 3 } as React.CSSProperties}>
-        <section className="card panel" aria-labelledby="delivery-details-title">
-          <h2 id="delivery-details-title" className="panel__title">
-            Delivery
-          </h2>
-          <dl className="details details--single">
-            <div>
-              <dt>For</dt>
-              <dd>{order.delivery.recipientName}</dd>
-            </div>
-            <div>
-              <dt>Where</dt>
-              <dd>
-                {order.delivery.address}, {order.delivery.town}
-              </dd>
-            </div>
-            <div>
-              <dt>Contact</dt>
-              <dd>{formatPhone(order.delivery.phone)}</dd>
-            </div>
-            {order.delivery.neededBy && (
-              <div>
-                <dt>Needed by</dt>
-                <dd>{formatDate(order.delivery.neededBy)}</dd>
-              </div>
-            )}
-            {order.inMemoryOf && (
-              <div>
-                <dt>In memory of</dt>
-                <dd>{order.inMemoryOf}</dd>
-              </div>
-            )}
-          </dl>
-        </section>
+        {delivery && (
+          <section className="card panel" aria-labelledby="delivery-details-title">
+            <h2 id="delivery-details-title" className="panel__title">
+              Delivery
+            </h2>
+            <dl className="details details--single">
+              {delivery.recipientName && (
+                <div>
+                  <dt>For</dt>
+                  <dd>{delivery.recipientName}</dd>
+                </div>
+              )}
+              {(delivery.address || delivery.town) && (
+                <div>
+                  <dt>Where</dt>
+                  <dd>
+                    {[delivery.address, delivery.town].filter(Boolean).join(', ')}
+                  </dd>
+                </div>
+              )}
+              {delivery.phone && (
+                <div>
+                  <dt>Contact</dt>
+                  <dd>{formatPhone(delivery.phone)}</dd>
+                </div>
+              )}
+              {delivery.neededBy && (
+                <div>
+                  <dt>Needed by</dt>
+                  <dd>{formatDate(delivery.neededBy)}</dd>
+                </div>
+              )}
+              {order.inMemoryOf && (
+                <div>
+                  <dt>In memory of</dt>
+                  <dd>{order.inMemoryOf}</dd>
+                </div>
+              )}
+            </dl>
+          </section>
+        )}
 
-        <section className="card panel" aria-labelledby="payment-details-title">
-          <h2 id="payment-details-title" className="panel__title">
-            Payment
-          </h2>
-          <dl className="details details--single">
-            <div>
-              <dt>Method</dt>
-              <dd>
-                {paymentMethodLabel[order.payment.method]}
-                {order.payment.ecocashNumber && <> · {order.payment.ecocashNumber}</>}
-              </dd>
-            </div>
-            <div>
-              <dt>Amount</dt>
-              <dd>{formatUsd(order.payment.amount)}</dd>
-            </div>
-            <div>
-              <dt>Reference</dt>
-              <dd>{order.payment.reference}</dd>
-            </div>
-            {order.payment.paidAt && (
+        {payment && (
+          <section className="card panel" aria-labelledby="payment-details-title">
+            <h2 id="payment-details-title" className="panel__title">
+              Payment
+            </h2>
+            <dl className="details details--single">
               <div>
-                <dt>Paid</dt>
-                <dd>{formatDate(order.payment.paidAt)}</dd>
+                <dt>Method</dt>
+                <dd>
+                  {paymentMethodLabel[payment.method] ?? payment.method}
+                  {payment.ecocashNumber && <> · {payment.ecocashNumber}</>}
+                </dd>
               </div>
-            )}
-          </dl>
-        </section>
+              <div>
+                <dt>Amount</dt>
+                <dd>{formatUsd(payment.amount ?? order.total ?? 0)}</dd>
+              </div>
+              {payment.reference && (
+                <div>
+                  <dt>Reference</dt>
+                  <dd>{payment.reference}</dd>
+                </div>
+              )}
+              {payment.paidAt && (
+                <div>
+                  <dt>Paid</dt>
+                  <dd>{formatDate(payment.paidAt)}</dd>
+                </div>
+              )}
+            </dl>
+          </section>
+        )}
       </div>
 
       <Callout tone="info" icon="phone">

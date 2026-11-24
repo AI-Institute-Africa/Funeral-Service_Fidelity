@@ -9,6 +9,10 @@ import { loadSessionUser } from './middleware/session'
 import { createAuthRouter } from './routes/authRoutes'
 import { createPolicyRouter } from './routes/policyRoutes'
 import { createFuneralCaseRouter } from './routes/funeralCaseRoutes'
+import { createOperationsRouter } from './routes/operationsRoutes'
+import { createAssistantRouter } from './routes/assistantRoutes'
+import { createWhatsAppRouter } from './routes/whatsappRoutes'
+import { createMemorialRouter } from './routes/memorialRoutes'
 
 /** Async because the alerts runtime connects to the job queue before its routes can be mounted. */
 export async function createApp() {
@@ -33,9 +37,15 @@ export async function createApp() {
   })
 
   app.use('/api', healthRoute)
-  app.use('/api', createAuthRouter())
+  const authRouter = createAuthRouter()
+  app.use('/api', authRouter)
+  app.use('/api/auth', authRouter)
   app.use('/api', createPolicyRouter())
   app.use('/api', createFuneralCaseRouter())
+  app.use('/api/admin', createOperationsRouter())
+  app.use('/api', createMemorialRouter())
+  app.use('/api/assistant', createAssistantRouter())
+  app.use('/api/whatsapp', createWhatsAppRouter())
 
   const alerts = await createAlertsRuntime()
   if (alerts) {

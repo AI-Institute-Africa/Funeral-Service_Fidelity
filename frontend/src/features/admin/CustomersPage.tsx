@@ -91,6 +91,8 @@ export default function CustomersPage() {
 }
 
 function CustomerRow({ customer, onOpen }: { customer: AdminCustomer; onOpen: () => void }) {
+  const policyStatus = customer.policyStatus ? (statusDisplay[customer.policyStatus.toLowerCase() as keyof typeof statusDisplay] ?? { label: customer.policyStatus, tone: 'neutral' as const }) : null
+
   return (
     <tr onClick={onOpen}>
       <td data-label="Customer">
@@ -102,11 +104,11 @@ function CustomerRow({ customer, onOpen }: { customer: AdminCustomer; onOpen: ()
         </span>
       </td>
       <td data-label="Policy">
-        {customer.policyNumber && customer.policyStatus ? (
+        {customer.policyNumber && policyStatus ? (
           <span className="cell-stack">
             <strong>{customer.policyNumber}</strong>
             <span>
-              <StatusChip tone={statusDisplay[customer.policyStatus].tone}>{statusDisplay[customer.policyStatus].label}</StatusChip>
+              <StatusChip tone={policyStatus.tone}>{policyStatus.label}</StatusChip>
             </span>
           </span>
         ) : (
@@ -165,7 +167,9 @@ function CustomerSheet({ id, onClose }: { id: string | undefined; onClose: () =>
                 <div>
                   <dt>Status</dt>
                   <dd>
-                    <StatusChip tone={statusDisplay[data.policy.status].tone}>{statusDisplay[data.policy.status].label}</StatusChip>
+                    <StatusChip tone={statusDisplay[data.policy.status.toLowerCase() as keyof typeof statusDisplay]?.tone ?? 'neutral'}>
+                      {statusDisplay[data.policy.status.toLowerCase() as keyof typeof statusDisplay]?.label ?? data.policy.status}
+                    </StatusChip>
                   </dd>
                 </div>
                 <div>
@@ -178,7 +182,7 @@ function CustomerSheet({ id, onClose }: { id: string | undefined; onClose: () =>
                 </div>
                 <div>
                   <dt>Beneficiaries</dt>
-                  <dd>{data.policy.beneficiaries.map((person) => `${person.name} (${person.share}%)`).join(', ')}</dd>
+                  <dd>{(data.policy.beneficiaries ?? []).map((person) => `${person.name} (${person.share}%)`).join(', ')}</dd>
                 </div>
               </dl>
             ) : (
@@ -188,59 +192,69 @@ function CustomerSheet({ id, onClose }: { id: string | undefined; onClose: () =>
 
           <section className="sheet-section" aria-labelledby="req-title">
             <h3 id="req-title">Requests</h3>
-            {data.requests.length === 0 ? (
+            {(data.requests ?? []).length === 0 ? (
               <p className="muted">None.</p>
             ) : (
               <ul className="mini-list">
-                {data.requests.map((request) => (
-                  <li key={request.id}>
-                    <span>
-                      <strong>
-                        {request.reference} · {requestKindLabel[request.kind]}
-                      </strong>
-                      <small>{formatDate(request.createdAt)}</small>
-                    </span>
-                    <StatusChip tone={requestStatusDisplay[request.status].tone}>{requestStatusDisplay[request.status].label}</StatusChip>
-                  </li>
-                ))}
+                {(data.requests ?? []).map((request) => {
+                  const kindText = requestKindLabel[request.kind] ?? request.kind
+                  const statusInfo = requestStatusDisplay[request.status] ?? { label: request.status, tone: 'neutral' as const }
+                  return (
+                    <li key={request.id}>
+                      <span>
+                        <strong>
+                          {request.reference} · {kindText}
+                        </strong>
+                        <small>{formatDate(request.createdAt)}</small>
+                      </span>
+                      <StatusChip tone={statusInfo.tone}>{statusInfo.label}</StatusChip>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </section>
 
           <section className="sheet-section" aria-labelledby="ord-title">
             <h3 id="ord-title">Orders</h3>
-            {data.orders.length === 0 ? (
+            {(data.orders ?? []).length === 0 ? (
               <p className="muted">None.</p>
             ) : (
               <ul className="mini-list">
-                {data.orders.map((order) => (
-                  <li key={order.id}>
-                    <span>
-                      <strong>
-                        {order.reference} · {formatUsd(order.total)}
-                      </strong>
-                      <small>{order.lines.map((line) => line.title).join(', ')}</small>
-                    </span>
-                    <StatusChip tone={orderStatusDisplay[order.status].tone}>{orderStatusDisplay[order.status].label}</StatusChip>
-                  </li>
-                ))}
+                {(data.orders ?? []).map((order) => {
+                  const statusInfo = orderStatusDisplay[order.status] ?? { label: order.status, tone: 'neutral' as const }
+                  const lines = order.lines ?? []
+                  return (
+                    <li key={order.id}>
+                      <span>
+                        <strong>
+                          {order.reference} · {formatUsd(order.total)}
+                        </strong>
+                        <small>{lines.map((line) => line.title).join(', ')}</small>
+                      </span>
+                      <StatusChip tone={statusInfo.tone}>{statusInfo.label}</StatusChip>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </section>
 
           <section className="sheet-section" aria-labelledby="mem-title">
             <h3 id="mem-title">Memorials</h3>
-            {data.memorials.length === 0 ? (
+            {(data.memorials ?? []).length === 0 ? (
               <p className="muted">None.</p>
             ) : (
               <ul className="mini-list">
-                {data.memorials.map((memorial) => (
+                {(data.memorials ?? []).map((memorial) => (
                   <li key={memorial.id}>
                     <span>
                       <strong>{memorial.name}</strong>
-                      {memorial.pendingTributes > 0 && <small>{memorial.pendingTributes} tribute waiting for the family</small>}
+                      <small>
+                        {memorial.published ? 'Published' : 'Draft'}
+                        {memorial.pendingTributes > 0 && ` · ${memorial.pendingTributes} pending`}
+                      </small>
                     </span>
-                    <StatusChip tone={memorial.published ? 'success' : 'neutral'}>{memorial.published ? 'Published' : 'Draft'}</StatusChip>
                   </li>
                 ))}
               </ul>
@@ -248,12 +262,12 @@ function CustomerSheet({ id, onClose }: { id: string | undefined; onClose: () =>
           </section>
         </>
       ) : customer.isPending ? (
-        <div role="status" aria-busy="true">
-          <span className="visually-hidden">Loading the customer…</span>
-          <Skeleton height="10rem" className="skeleton--card" />
+        <div className="sheet-stack" role="status" aria-busy="true">
+          <Skeleton height="7rem" />
+          <Skeleton height="10rem" />
         </div>
       ) : (
-        <QueryState isPending={false} error={customer.error} onRetry={() => void customer.refetch()} noun="the customer" />
+        <QueryState isPending={false} error={customer.error} onRetry={() => void customer.refetch()} noun="customer details" />
       )}
     </Sheet>
   )

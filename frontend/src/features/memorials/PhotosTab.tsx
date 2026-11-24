@@ -14,7 +14,8 @@ export function PhotosTab({ memorial }: { memorial: OwnedMemorial }) {
   const [progress, setProgress] = useState<string | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
 
-  const slotsLeft = MAX_PHOTOS - memorial.photos.length
+  const photos = Array.isArray(memorial.photos) ? memorial.photos : []
+  const slotsLeft = Math.max(0, MAX_PHOTOS - photos.length)
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return
@@ -49,7 +50,7 @@ export function PhotosTab({ memorial }: { memorial: OwnedMemorial }) {
               Photographs
             </h2>
             <p className="muted">
-              {memorial.photos.length} of {MAX_PHOTOS} added. They’re resized on your device, so even large photos
+              {photos.length} of {MAX_PHOTOS} added. They’re resized on your device, so even large photos
               upload quickly.
             </p>
           </div>
@@ -84,7 +85,7 @@ export function PhotosTab({ memorial }: { memorial: OwnedMemorial }) {
           )}
         </div>
 
-        {memorial.photos.length === 0 ? (
+        {photos.length === 0 ? (
           <div className="empty empty--large">
             <span className="icon-tile icon-tile--lg">
               <Icon name="heart" size={24} />
@@ -95,7 +96,7 @@ export function PhotosTab({ memorial }: { memorial: OwnedMemorial }) {
           </div>
         ) : (
           <ul className="photo-grid">
-            {memorial.photos.map((photo) => (
+            {photos.map((photo) => (
               <li key={photo.id}>
                 <PhotoCard
                   photo={photo}

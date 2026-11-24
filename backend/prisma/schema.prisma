@@ -776,3 +776,117 @@ model PolicyImportBatch {
   @@index([status, expiresAt])
   @@map("policy_import_batches")
 }
+
+model OperationCase {
+  id              String   @id @default(uuid())
+  reference       String   @unique
+  caseType        String   @map("case_type")
+  customerName    String   @map("customer_name")
+  phone           String
+  deceasedName    String   @map("deceased_name")
+  dateOfDeath     String   @map("date_of_death")
+  serviceLocation String   @map("service_location")
+  branch          String   @default("Harare")
+  funeralAt       String?  @map("funeral_at")
+  funeralLocation String   @map("funeral_location")
+  coordinator     String   @default("")
+  priority        String   @default("standard")
+  priorityReason  String   @default("") @map("priority_reason")
+  closureReason   String?  @map("closure_reason")
+  status          String   @default("new")
+  policyReference String?  @map("policy_reference")
+  intakeChannel   String?  @map("intake_channel")
+  postMortem      String   @default("pending") @map("post_mortem")
+  stages          Json     @default("[]")
+  checklist       Json     @default("[]")
+  documents       Json     @default("[]")
+  movements       Json     @default("[]")
+  quotes          Json     @default("[]")
+  payments        Json     @default("[]")
+  contributions   Json     @default("[]")
+  walletGoal      Json?    @map("wallet_goal")
+  demo            Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("operation_cases")
+}
+
+model OperationPolicy {
+  id                  String   @id @default(uuid())
+  reference           String   @unique
+  customerName        String   @map("customer_name")
+  phone               String
+  product             String
+  coveredMembers      String[] @default([]) @map("covered_members")
+  requestedServices   String[] @default([]) @map("requested_services")
+  applicationChannel  String?  @map("application_channel")
+  applicationLocation String?  @map("application_location")
+  status              String   @default("submitted")
+  checks              Json     @default("{}")
+  effectiveDate       String?  @map("effective_date")
+  responsibleStaff    String   @default("") @map("responsible_staff")
+  notes               String   @default("")
+  demo                Boolean  @default(false)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("operation_policies")
+}
+
+model OperationCatalogueItem {
+  id          String   @id @default(uuid())
+  name        String
+  category    String
+  description String   @default("")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("operation_catalogue_items")
+}
+
+model OperationExhumation {
+  id                 String   @id @default(uuid())
+  reference          String   @unique
+  customerName       String   @map("customer_name")
+  phone              String
+  deceasedName       String   @map("deceased_name")
+  address            String
+  destinationAddress String   @map("destination_address")
+  currency           String   @default("USD")
+  requestedAt        String   @map("requested_at")
+  status             String   @default("new")
+  estimatedCost      Decimal? @map("estimated_cost") @db.Decimal(10, 2)
+  quotedPrice        Decimal? @map("quoted_price") @db.Decimal(10, 2)
+  permitReference    String   @default("") @map("permit_reference")
+  permitStatus       String   @default("pending") @map("permit_status")
+  requirements       Json     @default("[]")
+  notes              String   @default("")
+  demo               Boolean  @default(false)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("operation_exhumations")
+}
+
+model OperationTokenCharge {
+  feature String   @id
+  label   String
+  enabled Boolean  @default(false)
+  amount  Decimal? @db.Decimal(10, 2)
+
+  @@map("operation_token_charges")
+}
+
+model OperationAuditEntry {
+  id        String   @id @default(uuid())
+  at        DateTime @default(now())
+  actor     String
+  action    String
+  entity    String
+  summary   String
+  demo      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("operation_audit_entries")
+}

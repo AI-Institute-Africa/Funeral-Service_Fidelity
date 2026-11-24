@@ -20,7 +20,7 @@ export type CaseStatus =
 
 export type VerificationStatus = 'not_started' | 'pending' | 'approved' | 'returned' | 'rejected'
 
-export type ContributionMethod = 'ecocash' | 'onemoney' | 'card'
+export type ContributionMethod = 'ecocash' | 'onemoney' | 'innbucks' | 'omari' | 'card' | 'zimswitch'
 export type ContributionKind = 'digital' | 'cash'
 export type ContributionStatus = 'initiated' | 'pending' | 'successful' | 'failed' | 'refunded' | 'reversed'
 
@@ -274,13 +274,43 @@ export const money = (amount: number) => `USD ${roundMoney(amount).toFixed(2)}`
 export const methodLabels: Record<ContributionMethod, string> = {
   ecocash: 'EcoCash',
   onemoney: 'OneMoney',
-  card: 'Card',
+  innbucks: 'InnBucks',
+  omari: 'O’Mari',
+  card: 'Card (Visa / Mastercard)',
+  zimswitch: 'Zimswitch',
 }
 
 export const methodHints: Record<ContributionMethod, string> = {
-  ecocash: 'Mobile money · simulated provider checkout',
-  onemoney: 'Mobile money · simulated provider checkout',
-  card: 'Card acquirer · simulated hosted checkout',
+  ecocash: 'Mobile money · EcoCash prompt & QR code',
+  onemoney: 'Mobile money · NetOne OneMoney USSD checkout',
+  innbucks: 'InnBucks express code / retail deposit & QR scan',
+  omari: 'O’Mari mobile wallet & instant USSD checkout',
+  card: 'Card acquirer · Visa & Mastercard 3-D Secure checkout',
+  zimswitch: 'Zimswitch ZIPIT instant interbank card & transfer',
+}
+
+export const CHEMA_WALLET_URLS = {
+  web: 'http://localhost:3005',
+  admin: 'http://localhost:3001',
+  api: 'http://localhost:7600',
+  newDraft: 'http://localhost:3005/new',
+  sso: (phone?: string, target = '/new') =>
+    `http://localhost:7600/auth/fidelity-sso?phone=${encodeURIComponent(phone || '+263771000111')}&target=${encodeURIComponent(target)}`,
+  ssoNew: (phone?: string) =>
+    `http://localhost:7600/auth/fidelity-sso?phone=${encodeURIComponent(phone || '+263771000111')}&target=${encodeURIComponent('/new')}`,
+  ssoDashboard: (phone?: string) =>
+    `http://localhost:7600/auth/fidelity-sso?phone=${encodeURIComponent(phone || '+263771000111')}&target=${encodeURIComponent('/')}`,
+  publicMemorial: (slug = 'nyathi-family') => 'http://localhost:3005/w/' + slug,
+  give: (slug = 'nyathi-family') => 'http://localhost:3005/w/' + slug + '/give',
+  walletDashboard: (id = 'demo') => 'http://localhost:3005/wallets/' + id,
+  receipt: (id = 'rec-001') => 'http://localhost:3005/c/' + id,
+  adminCases: 'http://localhost:3001/cases',
+  adminLedger: 'http://localhost:3001/ledger',
+  adminPayouts: 'http://localhost:3001/payouts',
+  adminReports: 'http://localhost:3001/reports',
+  adminAudit: 'http://localhost:3001/audit',
+  adminStaff: 'http://localhost:3001/staff',
+  adminConfig: 'http://localhost:3001/config',
 }
 
 export const contributionStatusLabels: Record<ContributionStatus, string> = {

@@ -6,6 +6,7 @@ import { getErrorMessage } from '@/lib/api-error'
 import { BIOGRAPHY_MAX_LENGTH, MAX_TIMELINE_ENTRIES, type OwnedMemorial } from './data'
 import { useUpdateMemorial } from './queries'
 import { validateBiography, validateTimeline } from './validation'
+import { AIMediaStudio } from './AIMediaStudio'
 
 const TOAST_DURATION_MS = 2800
 const THIS_YEAR = new Date().getFullYear()
@@ -17,12 +18,13 @@ const newRowId = () => `t-${Date.now().toString(36)}-${rowCounter++}`
 
 export function StoryTab({ memorial }: { memorial: OwnedMemorial }) {
   const update = useUpdateMemorial(memorial.id)
-  const [biography, setBiography] = useState(memorial.biography)
+  const [biography, setBiography] = useState(memorial.biography ?? '')
   const [rows, setRows] = useState<Row[]>(
-    memorial.timeline.map((entry) => ({ id: entry.id, year: String(entry.year), title: entry.title, text: entry.text ?? '' })),
+    (memorial.timeline ?? []).map((entry) => ({ id: entry.id, year: String(entry.year), title: entry.title, text: entry.text ?? '' })),
   )
   const [errors, setErrors] = useState<{ biography?: string; timeline?: string }>({})
   const [saved, setSaved] = useState(false)
+  const [studioOpen, setStudioOpen] = useState(false)
 
   useEffect(() => {
     if (!saved) return
@@ -50,12 +52,45 @@ export function StoryTab({ memorial }: { memorial: OwnedMemorial }) {
     update.mutate({ biography, timeline }, { onSuccess: () => setSaved(true) })
   }
 
+  const handleApplyAIBiography = (
+    generatedText: string,
+    generatedTimeline: Array<{ year: number; title: string; text?: string }>,
+  ) => {
+    setBiography(generatedText)
+    if (generatedTimeline && generatedTimeline.length > 0) {
+      setRows(
+        generatedTimeline.map((item) => ({
+          id: newRowId(),
+          year: String(item.year),
+          title: item.title,
+          text: item.text || '',
+        })),
+      )
+    }
+  }
+
   return (
     <form className="stack" onSubmit={handleSubmit} noValidate>
       <section className="card panel studio-form stack" aria-labelledby="story-editor-title">
-        <h2 id="story-editor-title" className="panel__title">
-          Their story
-        </h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <h2 id="story-editor-title" className="panel__title" style={{ margin: 0 }}>
+            Their story
+          </h2>
+          <button
+            type="button"
+            className="btn btn--sm"
+            style={{
+              background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 600,
+            }}
+            onClick={() => setStudioOpen(true)}
+          >
+            ✨ AI Media Studio (Music, Video, Bio)
+          </button>
+        </div>
+
         <div className="field">
           <label className="field__label" htmlFor="biography">
             Life story
@@ -169,6 +204,14 @@ export function StoryTab({ memorial }: { memorial: OwnedMemorial }) {
       </div>
 
       {saved && <Toast>Story saved.</Toast>}
+
+      {studioOpen && (
+        <AIMediaStudio
+          initialTab="biography"
+          onClose={() => setStudioOpen(false)}
+          onApplyBiography={handleApplyAIBiography}
+        />
+      )}
     </form>
   )
 }

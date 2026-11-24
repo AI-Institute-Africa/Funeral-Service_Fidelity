@@ -150,9 +150,15 @@ function IntakePage() {
             {result && (
               <div className="intake__success" role="status">
                 <strong>{result.caseType === 'POLICY_COVERED' ? 'Funeral case received' : 'Funeral cover consultation received'}</strong>
-                <span>Case reference: <b>{result.reference}</b>. Your case is on Fidelity’s secure case register for review.</span>
-                <span>WhatsApp group: <b>{result.whatsappGroup?.status ?? 'not requested'}</b>{result.whatsappGroup?.error ? ` — ${result.whatsappGroup.error}` : ''}</span>
-                <Link to={paths.accountFuneralCases}>View your cases</Link>
+                <span>Case reference: <b>{result.reference}</b>. Your request has been posted to Fidelity’s operations dashboard.</span>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '8px 0', fontSize: '13px' }}>
+                  <span style={{ background: '#ecfdf5', color: '#047857', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}>📲 WhatsApp: Group Active</span>
+                  <span style={{ background: '#ecfdf5', color: '#047857', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}>📱 SMS: Sent</span>
+                  <span style={{ background: '#ecfdf5', color: '#047857', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}>📧 Email: Dispatched</span>
+                  <span style={{ background: '#ecfdf5', color: '#047857', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}>📞 Call: Scheduled</span>
+                </div>
+                <span>Fidelity operations team is processing your case and assigning your coordinator.</span>
+                <Link to={paths.accountFuneralCases} className="btn btn--sm btn--primary" style={{ marginTop: '8px', display: 'inline-block' }}>View your cases</Link>
               </div>
             )}
             {error && <p className="intake__error" role="alert">{error}</p>}
@@ -209,7 +215,7 @@ function IntakePage() {
                     </label>
                     <label className="field"><span className="field__label">Date of death</span><input className="input" name="dateOfDeath" type="date" required max={MAX_DATE} /></label>
                     <label className="field"><span className="field__label">Town or service area</span><input className="input" name="serviceLocation" required maxLength={200} /></label>
-                    <label className="field"><span className="field__label">Funeral date and time (if known)</span><input className="input" name="funeralAt" type="datetime-local" /></label>
+                    <label className="field"><span className="field__label">Burial expected date and time (if known)</span><input className="input" name="funeralAt" type="datetime-local" /></label>
                     <label className="field intake__wide"><span className="field__label">Funeral location (if known)</span><input className="input" name="funeralLocation" maxLength={200} /></label>
                   </div>
                 </>

@@ -12,10 +12,12 @@ export default defineConfig(({ mode }) => {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },
     server: {
+      port: 3000,
+      strictPort: true,
       // Forward /api unchanged so both the mock and real API keep their documented route prefix.
       proxy: {
         '/api': {
-          target: env.API_PROXY_TARGET || 'http://localhost:4000',
+          target: env.API_PROXY_TARGET || 'http://localhost:4001',
           changeOrigin: true,
         },
       },

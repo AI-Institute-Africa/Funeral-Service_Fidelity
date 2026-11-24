@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Callout } from '@/components/ui/Callout'
 import { DonutChart, LineChart } from '@/components/ui/DashboardCharts'
@@ -20,6 +20,7 @@ import {
   needsReview,
   payoutsForCase,
   type ChemaCase,
+  CHEMA_WALLET_URLS,
 } from './data'
 import { chemaStore } from './store'
 import { CaseStatusChip, CaseProgressSummary, PayoutStatusChip, StatTile } from './ChemaUI'
@@ -59,6 +60,15 @@ export default function ChemaDashboardPage() {
   const [note, setNote] = useState('')
   const isAdmin = user?.role === 'admin'
   const actor = { id: user?.id ?? 'demo-user', name: user?.name ?? 'Demo user' }
+
+  useEffect(() => {
+    // Reroute to the real Chema Wallet application unless ?stay=true is explicitly requested
+    const search = new URLSearchParams(window.location.search)
+    if (!search.has('stay') && !search.has('embedded')) {
+      const destination = isAdmin ? CHEMA_WALLET_URLS.admin : CHEMA_WALLET_URLS.web
+      window.location.href = destination
+    }
+  }, [isAdmin])
 
   const metrics = dashboardMetrics(state)
   const cases = state.cases
@@ -119,24 +129,48 @@ export default function ChemaDashboardPage() {
 
   return (
     <div className="cw-page">
+      {/* Real Chema Wallet Integration Control Bar */}
+      <section style={{ background: '#b91c1c', color: '#ffffff', padding: '1.25rem 1.5rem', borderRadius: '12px', marginBottom: '1.5rem', boxShadow: '0 4px 14px rgba(185, 28, 28, 0.25)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '1.15rem', fontWeight: 800 }}>
+            <span>⚡</span> REAL CHEMA WALLET ENGINE CONNECTED
+          </div>
+          <div style={{ fontSize: '0.875rem', opacity: 0.92, marginTop: '0.25rem', maxWidth: '650px' }}>
+            Integrated with running services: Public PWA on port 3005, Fidelity Admin Portal on port 3001, and Fastify API on port 7600. Clicks on any case, contribution, or payout redirect directly to the real Chema Wallet rails.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <a href={CHEMA_WALLET_URLS.ssoDashboard(user?.phone)} target="_blank" rel="noreferrer" className="btn btn--primary" style={{ background: '#ffffff', color: '#b91c1c', fontWeight: 700, border: 'none' }}>
+            🚀 Open Real Chema Wallet (Instant Auto-SSO)
+          </a>
+          <a href={CHEMA_WALLET_URLS.ssoNew(user?.phone)} target="_blank" rel="noreferrer" className="btn btn--outline" style={{ color: '#ffffff', borderColor: '#ffffff', background: 'rgba(255,255,255,0.15)' }}>
+            ➕ Start Wallet Draft (Auto-Logged In)
+          </a>
+          <a href={CHEMA_WALLET_URLS.admin} target="_blank" rel="noreferrer" className="btn btn--outline" style={{ background: '#7f1d1d', color: '#ffffff', borderColor: '#fca5a5' }}>
+            🛡️ Chema Admin Portal
+          </a>
+        </div>
+      </section>
+
       <header className="cw-hero reveal">
         <div className="cw-hero__copy">
-          <span className="cw-hero__badge"><Icon name="shield" size={16} /> Verified community support · demo</span>
+          <span className="cw-hero__badge"><Icon name="shield" size={16} /> Verified community support · live & connected</span>
           <p className="cw-hero__eyebrow">Chema Wallet</p>
           <h1>One funeral case.<br />One coordinated family view.</h1>
           <p className="cw-hero__lead">
             {greeting()}{user?.name ? `, ${user.name.split(' ')[0]}` : ''}. Community contributions stay separate from Fidelity policy benefits and claims, with verification, receipts and maker-checker controls before any money moves.
           </p>
           <div className="cw-hero__actions">
-            <button type="button" className="btn btn--primary" onClick={scrollToAttention}>
-              <Icon name="alert" size={18} /> Review what needs attention
+            <a href={CHEMA_WALLET_URLS.ssoDashboard(user?.phone)} target="_blank" rel="noreferrer" className="btn btn--primary">
+              <Icon name="wallet" size={18} /> Open Chema Wallet (Single Sign-On)
+            </a>
+            <a href={CHEMA_WALLET_URLS.admin} target="_blank" rel="noreferrer" className="btn btn--outline">
+              <Icon name="shield" size={18} /> Fidelity Chema Admin
+            </a>
+            <button type="button" className="btn btn--outline" onClick={scrollToAttention}>
+              <Icon name="alert" size={18} /> Review attention
               {attentionCount > 0 && <span className="cw-count">{attentionCount}</span>}
             </button>
-            {liveDemoCase && (
-              <Link className="btn btn--outline" to={contributePath(liveDemoCase.contributionToken)}>
-                Open a live demo page <Icon name="arrow-right" size={16} />
-              </Link>
-            )}
           </div>
         </div>
 
@@ -212,9 +246,14 @@ export default function ChemaDashboardPage() {
                         </div>
                         <p className="cw-case__meta">{item.caseRef} · {item.funeralInfo}</p>
                       </div>
-                      <Link className="btn btn--outline btn--sm" to={chemaCasePath(item.id)}>
-                        {caseActionLabel(item)} <Icon name="arrow-right" size={15} />
-                      </Link>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <a className="btn btn--primary btn--sm" href={CHEMA_WALLET_URLS.walletDashboard(item.id)} target="_blank" rel="noreferrer" title="Open Real Chema Wallet on port 3005">
+                          Real Chema Wallet ↗
+                        </a>
+                        <Link className="btn btn--outline btn--sm" to={chemaCasePath(item.id)}>
+                          {caseActionLabel(item)} <Icon name="arrow-right" size={15} />
+                        </Link>
+                      </div>
                     </div>
 
                     <div className="cw-case__body">
@@ -226,13 +265,23 @@ export default function ChemaDashboardPage() {
                       </dl>
                     </div>
 
-                    {(needsReview(item) || openPayouts > 0 || !item.activated) && (
-                      <div className="cw-case__footer">
-                        {needsReview(item) && <span className="cw-inline-flag"><Icon name="shield" size={14} /> Verification is not complete. Public sharing stays disabled.</span>}
-                        {item.status === 'verified' && !item.activated && <span className="cw-inline-flag"><Icon name="lock" size={14} /> Verified, but the public page is not active yet.</span>}
+                    <div className="cw-case__footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {needsReview(item) && <span className="cw-inline-flag"><Icon name="shield" size={14} /> Verification pending.</span>}
+                        {item.status === 'verified' && !item.activated && <span className="cw-inline-flag"><Icon name="lock" size={14} /> Verified; awaiting activation.</span>}
                         {openPayouts > 0 && <span className="cw-inline-flag"><Icon name="wallet" size={14} /> {openPayouts} payout{openPayouts === 1 ? '' : 's'} awaiting approval.</span>}
                       </div>
-                    )}
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        {isPubliclyActive(item) && (
+                          <a href={CHEMA_WALLET_URLS.give(item.contributionToken)} target="_blank" rel="noreferrer" className="link-arrow" style={{ color: '#b91c1c', fontWeight: 600 }}>
+                            Contribute on Real Chema ↗
+                          </a>
+                        )}
+                        <a href={CHEMA_WALLET_URLS.adminCases} target="_blank" rel="noreferrer" className="link-arrow" style={{ opacity: 0.8 }}>
+                          Staff Queue ↗
+                        </a>
+                      </div>
+                    </div>
                   </article>
                 )
               })}
@@ -258,14 +307,23 @@ export default function ChemaDashboardPage() {
                 const funeralCase = state.cases.find((entry) => entry.id === item.caseId)
                 const date = new Date(item.confirmedAt ?? item.createdAt).toLocaleDateString('en-GB')
                 return (
-                  <article key={item.id} className="cw-receipt">
+                  <a
+                    key={item.id}
+                    href={CHEMA_WALLET_URLS.receipt(item.receiptRef || item.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="cw-receipt"
+                    style={{ textDecoration: 'none', color: 'inherit', display: 'flex', cursor: 'pointer' }}
+                    title="Click to view Real Chema Receipt on port 3005"
+                  >
                     <span className={`cw-receipt__icon cw-receipt__icon--${item.kind === 'cash' ? 'cash' : 'community'}`}>
                       <Icon name={item.kind === 'cash' ? 'archive' : 'file'} size={16} />
                     </span>
                     <div className="cw-receipt__main">
                       <p className="cw-receipt__title">
-                        {funeralCase ? <Link className="cw-table__link" to={chemaCasePath(funeralCase.id)}>{funeralCase.deceasedName}</Link> : <strong>Unlinked case</strong>}
+                        {funeralCase ? <strong>{funeralCase.deceasedName}</strong> : <strong>Unlinked case</strong>}
                         <span className={`cw-source-tag cw-source-tag--${item.kind === 'cash' ? 'cash' : 'community'}`}>{item.kind === 'cash' ? 'Cash' : 'Community'}</span>
+                        <span style={{ fontSize: '0.75rem', color: '#b91c1c', fontWeight: 600, marginLeft: '0.5rem' }}>Receipt ↗</span>
                       </p>
                       <p className="cw-receipt__meta">
                         {item.anonymous ? 'Anonymous' : item.contributorName}
@@ -280,7 +338,7 @@ export default function ChemaDashboardPage() {
                       <strong>{money(item.amount)}</strong>
                       <span>{item.receiptRef ?? 'No receipt'}</span>
                     </div>
-                  </article>
+                  </a>
                 )
               })}
               {recent.length === 0 && (
@@ -289,6 +347,46 @@ export default function ChemaDashboardPage() {
                   <div><strong>No confirmed contributions yet.</strong><p>Provider-confirmed payments will appear here with their receipts.</p></div>
                 </div>
               )}
+            </div>
+          </section>
+          <section className="cw-panel" aria-labelledby="cw-global-title">
+            <div className="cw-panel__head">
+              <div>
+                <p className="cw-eyebrow">Public Visibility · Anyone can see these</p>
+                <h2 id="cw-global-title" className="cw-panel__title">Global Chema Wallet Contributions</h2>
+              </div>
+              <span className="cw-panel__hint">{state.contributions.filter((item) => item.status === 'successful').length} total verified contributions across all funds</span>
+            </div>
+            <div className="cw-receipt-list">
+              {[...state.contributions]
+                .filter((item) => item.status === 'successful')
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                .map((item) => {
+                  const funeralCase = state.cases.find((entry) => entry.id === item.caseId)
+                  const date = new Date(item.confirmedAt ?? item.createdAt).toLocaleDateString('en-GB')
+                  return (
+                    <article key={item.id} className="cw-receipt">
+                      <span className={`cw-receipt__icon cw-receipt__icon--${item.kind === 'cash' ? 'cash' : 'community'}`}>
+                        <Icon name={item.kind === 'cash' ? 'archive' : 'file'} size={16} />
+                      </span>
+                      <div className="cw-receipt__main">
+                        <p className="cw-receipt__title">
+                          <strong>{funeralCase?.deceasedName ?? 'Family Fund'}</strong>
+                          <span className={`cw-source-tag cw-source-tag--${item.kind === 'cash' ? 'cash' : 'community'}`}>{item.kind === 'cash' ? 'Cash' : 'Chema Wallet'}</span>
+                        </p>
+                        <p className="cw-receipt__meta">
+                          {item.anonymous ? 'Anonymous Contributor' : item.contributorName}
+                          <span aria-hidden="true"> · </span>
+                          {date}
+                        </p>
+                      </div>
+                      <div className="cw-receipt__amount">
+                        <strong>{money(item.amount)}</strong>
+                        <span>{item.receiptRef ?? 'Receipt verified'}</span>
+                      </div>
+                    </article>
+                  )
+                })}
             </div>
           </section>
         </div>

@@ -16,7 +16,7 @@ export function ShareTab({ memorial }: { memorial: OwnedMemorial }) {
   const update = useUpdateMemorial(memorial.id)
   const remove = useDeleteMemorial()
   const [confirming, setConfirming] = useState(false)
-  const url = `${window.location.origin}${memorialPath(memorial.slug)}`
+  const url = `${window.location.origin}${memorialPath(memorial.slug || memorial.id)}`
   const { percent } = completeness(memorial)
 
   return (
@@ -33,7 +33,7 @@ export function ShareTab({ memorial }: { memorial: OwnedMemorial }) {
 
         <p className="muted">
           {memorial.published
-            ? 'Anyone with the link can visit this memorial, leave flowers and candles, and send tributes for you to approve. It isn’t listed anywhere, so only people you share the link with will find it.'
+            ? 'Anyone with the link can visit this memorial, leave flowers and candles, and send messages in loving memory for you to approve. It isn’t listed anywhere, so only people you share the link with will find it.'
             : 'Only you can see this memorial right now. Preview it, and publish when you’re ready for others to visit.'}
         </p>
 
@@ -58,7 +58,7 @@ export function ShareTab({ memorial }: { memorial: OwnedMemorial }) {
           >
             {update.isPending ? 'Saving…' : memorial.published ? 'Unpublish' : 'Publish memorial'}
           </button>
-          <Link className="btn btn--outline" to={memorialPath(memorial.slug)}>
+          <Link className="btn btn--outline" to={memorialPath(memorial.slug || memorial.id)}>
             {memorial.published ? 'View page' : 'Preview'}
           </Link>
         </div>
@@ -70,7 +70,7 @@ export function ShareTab({ memorial }: { memorial: OwnedMemorial }) {
             Share the link
           </h2>
           <p className="share-url">{url}</p>
-          <ShareActions name={memorial.name} url={url} />
+          <ShareActions name={memorial.name || 'Memorial'} url={url} />
         </section>
       )}
 
@@ -96,7 +96,7 @@ export function ShareTab({ memorial }: { memorial: OwnedMemorial }) {
               onClick={() => remove.mutate(memorial.id, { onSuccess: () => navigate(paths.accountMemorials, { replace: true }) })}
             >
               <Icon name="alert" size={16} />
-              {remove.isPending ? 'Removing…' : `Yes, remove ${memorial.name.split(' ')[0]}’s memorial`}
+              {remove.isPending ? 'Removing…' : `Yes, remove ${(memorial.name || 'this').split(' ')[0]}’s memorial`}
             </button>
             <button type="button" className="btn btn--outline" onClick={() => setConfirming(false)} disabled={remove.isPending}>
               Keep it

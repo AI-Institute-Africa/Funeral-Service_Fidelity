@@ -69,7 +69,17 @@ export type DeliveryDetails = {
   note?: string
 }
 
-export type PaymentMethod = 'ecocash' | 'paynow'
+export type PaymentMethod =
+  | 'ecocash'
+  | 'paynow'
+  | 'innbucks'
+  | 'omari'
+  | 'onemoney'
+  | 'zipit'
+  | 'card'
+  | 'chema_wallet'
+  | 'kuwana_tokens'
+  | 'cash'
 export type PaymentStatus = 'pending' | 'paid' | 'failed'
 
 export type PaymentInput = {
@@ -93,6 +103,7 @@ export type OrderStatus =
   | 'confirmed'
   | 'in_progress'
   | 'delivered'
+  | 'closed'
   | 'cancelled'
 
 export type OrderLine = {

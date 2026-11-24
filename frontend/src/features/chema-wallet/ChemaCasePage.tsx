@@ -42,7 +42,7 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'contributions', label: 'Contributions' },
   { key: 'payouts', label: 'Payouts' },
   { key: 'verification', label: 'Verification' },
-  { key: 'ledger', label: 'Ledger' },
+  { key: 'ledger', label: 'Chema Wallet' },
   { key: 'privacy', label: 'Privacy & controls' },
   { key: 'audit', label: 'Audit' },
 ]
@@ -157,13 +157,16 @@ export default function ChemaCasePage() {
           <p className="cw-case-hero__meta">
             {item.caseRef}
             {item.dateOfDeath && <> · Date of death {new Date(item.dateOfDeath).toLocaleDateString('en-GB')}</>}
-            {item.funeralDate && <> · Funeral {new Date(item.funeralDate).toLocaleDateString('en-GB')}</>}
+            {item.funeralDate && <> · Burial expected {new Date(item.funeralDate).toLocaleDateString('en-GB')}</>}
           </p>
           <CaseStatusLine item={item} />
           <p className="cw-case-hero__info">{item.funeralInfo}</p>
           <div className="cw-action-row">
-            {active && <a className="btn btn--primary btn--sm" href={contributePath(item.contributionToken)}><Icon name="wallet" size={16} /> Open public page</a>}
+            {active && <a className="btn btn--primary btn--sm" href={'http://localhost:3005/w/' + item.contributionToken + '/give'} target="_blank" rel="noreferrer"><Icon name="wallet" size={16} /> Contribute on Real Chema ↗</a>}
+            {active && <a className="btn btn--outline btn--sm" href={'http://localhost:3005/w/' + item.contributionToken} target="_blank" rel="noreferrer"><Icon name="file" size={16} /> Real Chema Public Page ↗</a>}
+            <a className="btn btn--outline btn--sm" href={`http://localhost:7600/auth/fidelity-sso?phone=${encodeURIComponent(user?.phone || '+263772888999')}&target=/wallets`} target="_blank" rel="noreferrer" style={{borderColor: '#b91c1c', color: '#b91c1c'}}><Icon name="wallet" size={16} /> Switch to Chema PWA (Auto-SSO) ↗</a>
             <Link className="btn btn--outline btn--sm" to={funeralRecordPath(item.funeralRecordId)}><Icon name="archive" size={16} /> Funeral record</Link>
+            <a className="btn btn--outline btn--sm" href={'http://localhost:3001/cases/' + item.id} target="_blank" rel="noreferrer" style={{borderColor: '#b91c1c', color: '#b91c1c'}}><Icon name="shield" size={16} /> Chema Admin ↗</a>
             {item.coordinator && <span className="cw-inline-note">Coordinator: {item.coordinator.name}</span>}
           </div>
         </div>
@@ -241,7 +244,7 @@ export default function ChemaCasePage() {
                 <dl className="cw-facts">
                   <div><dt>Case reference</dt><dd>{item.caseRef}</dd></div>
                   <div><dt>Opened</dt><dd>{new Date(item.createdAt).toLocaleDateString('en-GB')}</dd></div>
-                  <div><dt>Funeral date</dt><dd>{item.funeralDate ? new Date(item.funeralDate).toLocaleDateString('en-GB') : 'Not set'}</dd></div>
+                  <div><dt>Burial expected date</dt><dd>{item.funeralDate ? new Date(item.funeralDate).toLocaleDateString('en-GB') : 'Not set'}</dd></div>
                   <div><dt>Target</dt><dd>{item.targetAmount > 0 ? money(item.targetAmount) : 'No target set'}</dd></div>
                   <div><dt>Approval threshold</dt><dd>{money(item.approvalThreshold)}</dd></div>
                   <div><dt>Coordinator</dt><dd>{item.coordinator ? item.coordinator.name : 'Not assigned'}</dd></div>
@@ -338,19 +341,19 @@ export default function ChemaCasePage() {
 
               {isAdmin && queues.length > 0 && (
                 <section className="cw-panel" aria-labelledby="cw-moderation-title">
-                  <div className="cw-panel__head"><div><p className="cw-eyebrow">Tribute moderation</p><h2 id="cw-moderation-title" className="cw-panel__title">Held messages</h2></div><StatusChip tone="warning">{queues.length}</StatusChip></div>
+                  <div className="cw-panel__head"><div><p className="cw-eyebrow">In Loving Memory Moderation</p><h2 id="cw-moderation-title" className="cw-panel__title">Held messages</h2></div><StatusChip tone="warning">{queues.length}</StatusChip></div>
                   <div className="cw-moderation-list">
                     {queues.map((entry) => (
                       <article key={entry.id} className="cw-moderation">
                         <div><strong>{entry.anonymous ? 'Anonymous' : entry.contributorName}</strong><p>“{entry.message}”</p></div>
                         <div className="cw-action-row">
-                          <button type="button" className="btn btn--primary btn--sm" onClick={() => commit(chemaStore.moderateTribute(entry.id, 'approved', actor), 'Tribute published to the public page.')}>Publish</button>
-                          <button type="button" className="btn btn--outline btn--sm" onClick={() => commit(chemaStore.moderateTribute(entry.id, 'rejected', actor), 'Tribute will not be published.')}>Keep private</button>
+                          <button type="button" className="btn btn--primary btn--sm" onClick={() => commit(chemaStore.moderateTribute(entry.id, 'approved', actor), 'In loving memory message published to the public page.')}>Publish</button>
+                          <button type="button" className="btn btn--outline btn--sm" onClick={() => commit(chemaStore.moderateTribute(entry.id, 'rejected', actor), 'In loving memory message will not be published.')}>Keep private</button>
                         </div>
                       </article>
                     ))}
                   </div>
-                  <p className="cw-inline-note">Tributes are moderated separately from financial records. Anonymous display never removes the audit record.</p>
+                  <p className="cw-inline-note">In loving memory messages are moderated separately from financial records. Anonymous display never removes the audit record.</p>
                 </section>
               )}
 

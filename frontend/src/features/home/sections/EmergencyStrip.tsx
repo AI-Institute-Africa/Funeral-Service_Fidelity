@@ -1,5 +1,4 @@
-import { Link } from 'react-router-dom'
-import { anchor } from '@/config/routes'
+import { contact } from '@/config/site'
 
 export function EmergencyStrip() {
   return (
@@ -11,12 +10,12 @@ export function EmergencyStrip() {
         </div>
         <div>
           <p>
-            For urgent arrangements, repatriation inquiries or cemetery guidance, our support team can help families navigate the next steps with care and clarity.
+            For urgent arrangements, repatriation inquiries or cemetery guidance, our 24/7 support team can help families navigate the next steps with care and clarity.
           </p>
         </div>
-        <Link to={anchor('quote-form')} className="btn btn--deep btn--lg">
-          Request assistance
-        </Link>
+        <a href={contact.tollFreeHref} className="btn btn--deep btn--lg" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+          📞 Call 24/7 Helpline: {contact.tollFree}
+        </a>
       </div>
     </section>
   )

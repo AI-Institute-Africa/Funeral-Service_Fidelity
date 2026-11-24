@@ -317,3 +317,130 @@
     .brand__mark { height: 26px; }
   }
 }
+
+
+/* ---- RED TOP NAVIGATION BAR THEME ---- */
+.site-header,
+.site-header--adaptive,
+.site-header--adaptive.is-light,
+.site-header.is-scrolled,
+.site-header--adaptive.is-scrolled {
+  background: #b91c1c !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 18px rgba(185, 28, 28, 0.35) !important;
+  border-bottom: 1px solid #991b1b !important;
+  --outline-color: #ffffff !important;
+  --outline-hover: rgba(255, 255, 255, 0.25) !important;
+}
+
+.site-shell:has([data-header-overlay]) .site-header--adaptive {
+  margin-bottom: 0 !important;
+}
+
+.site-header .brand,
+.site-header.is-light .brand {
+  color: #ffffff !important;
+}
+
+.site-header .brand__text strong,
+.site-header.is-light .brand__text strong {
+  color: #ffffff !important;
+}
+
+.site-header .brand__text span,
+.site-header.is-light .brand__text span {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.site-header .brand__mark--on-light {
+  display: none !important;
+}
+
+.site-header .brand__mark--on-dark,
+.site-header.is-light .brand__mark--on-dark {
+  display: block !important;
+}
+
+.site-header .brand__tag {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+}
+
+.site-header .site-nav li a,
+.site-header.is-light .site-nav li a {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.site-header .site-nav li a:hover,
+.site-header.is-light .site-nav li a:hover,
+.site-header .site-nav li a[aria-current='page'],
+.site-header.is-light .site-nav li a[aria-current='page'] {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+}
+
+.site-header .site-nav__signin,
+.site-header.is-light .site-nav__signin {
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.site-header .site-nav__signin:hover,
+.site-header.is-light .site-nav__signin:hover {
+  background: rgba(255, 255, 255, 0.22) !important;
+  border-color: #ffffff !important;
+}
+
+.site-header .site-nav__account,
+.site-header.is-light .site-nav__account {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+}
+
+.site-header .site-nav__account:hover,
+.site-header.is-light .site-nav__account:hover {
+  background: rgba(255, 255, 255, 0.35) !important;
+}
+
+.site-header .site-header__cart .cart-button,
+.site-header.is-light .site-header__cart .cart-button {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+}
+
+.site-header .site-header__cart .cart-button:hover,
+.site-header.is-light .site-header__cart .cart-button:hover {
+  background: rgba(255, 255, 255, 0.35) !important;
+}
+
+.site-header .cart-button__count {
+  background: #ffffff !important;
+  color: #b91c1c !important;
+  font-weight: 700 !important;
+}
+
+.site-header .menu-toggle,
+.site-header.is-light .menu-toggle {
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.site-header .btn--outline,
+.site-header.is-light .btn--outline {
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.site-header .btn--outline:hover,
+.site-header.is-light .btn--outline:hover {
+  background: rgba(255, 255, 255, 0.22) !important;
+  border-color: #ffffff !important;
+}
+
+.site-header .account-user,
+.site-header .account-user__name {
+  color: #ffffff !important;
+}

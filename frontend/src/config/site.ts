@@ -29,8 +29,9 @@ export const primaryNav: NavLink[] = [
   { label: 'Services', to: anchor('services') },
   { label: 'Plans', to: anchor('plans') },
   { label: 'Marketplace', to: paths.marketplace },
-  { label: 'Memorials', to: anchor('memorials') },
-  { label: 'Support', to: anchor('support') },
+  { label: 'In Loving Memory', to: anchor('memorials') },
+  { label: 'Chema Wallet', to: 'http://localhost:3005' },
+  { label: 'Funeral Support', to: paths.funeralSupport },
 ]
 
 export type AccountNavItem = NavLink & { icon: IconName; end?: boolean }
@@ -42,7 +43,7 @@ export const accountNav: AccountNavItem[] = [
   { label: 'Funeral cases', to: paths.accountFuneralCases, icon: 'archive' },
   { label: 'Family History', to: paths.accountFamilyHistory, icon: 'users' },
   { label: 'Records', to: paths.accountFuneralRecords, icon: 'archive' },
-  { label: 'Chema Wallet', to: paths.accountChemaWallet, icon: 'wallet' },
+  { label: 'Chema Wallet', to: 'http://localhost:3005', icon: 'wallet' },
   { label: 'Coverage', to: paths.accountFuneralStreaming, icon: 'video' },
   { label: 'Funeral day', to: paths.accountProcession, icon: 'map' },
   { label: 'Estate', to: paths.accountEstate, icon: 'file' },
@@ -62,10 +63,18 @@ export function portalNav(role: 'admin' | 'provider'): AccountNavItem[] {
   if (role === 'provider') return common
   return [
     ...common,
-    { label: 'Customers', to: paths.portalCustomers, icon: 'users' },
-    { label: 'Providers', to: paths.portalProviders, icon: 'shield' },
-    { label: 'Funeral cases', to: paths.portalFuneralCases, icon: 'archive' },
-    { label: 'Policy import', to: paths.portalPolicyImport, icon: 'file' },
+    { label: 'Operations dashboard', to: paths.portalOperations, icon: 'home' },
+    { label: 'Funeral cases', to: `${paths.portalOperations}?section=cases`, icon: 'archive' },
+    { label: 'Cash walk-ins', to: `${paths.portalOperations}?section=cases&type=cash-walk-in`, icon: 'plus' },
+    { label: 'Customers & policies', to: `${paths.portalOperations}?section=policies`, icon: 'users' },
+    { label: 'Services & products', to: `${paths.portalOperations}?section=catalogue`, icon: 'bag' },
+    { label: 'Funeral coordinator', to: paths.portalFuneralCases, icon: 'shield' },
+    { label: 'Quotations & payments', to: `${paths.portalOperations}?section=finance`, icon: 'file' },
+    { label: 'Chema Wallet (Operations)', to: 'http://localhost:3001', icon: 'wallet' },
+    { label: 'Chema Admin (Portal)', to: 'http://localhost:3001', icon: 'shield' },
+    { label: 'Reports', to: `${paths.portalOperations}?section=reports`, icon: 'clock' },
+    { label: 'Audit log', to: `${paths.portalOperations}?section=audit`, icon: 'clock' },
+    { label: 'Policy import', to: paths.portalPolicyImport, icon: 'download' },
     { label: 'Activity', to: paths.portalActivity, icon: 'clock' },
     { label: 'Messaging', to: paths.portalMessaging, icon: 'chat' },
   ]
@@ -81,6 +90,7 @@ export const footerColumns: { title: string; links: NavLink[] }[] = [
       { label: 'Cemeteries & grave search', to: paths.cemeteries },
       { label: 'Grief support assistant', to: paths.assistant },
       { label: 'Family History & Family Tree', to: paths.accountFamilyHistory },
+      { label: 'Chema Wallet (Contributions & Payouts)', to: 'http://localhost:3005' },
       { label: 'Marketplace', to: paths.marketplace },
       { label: 'Vision, mission and values', to: paths.about },
     ],

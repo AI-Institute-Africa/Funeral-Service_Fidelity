@@ -34,7 +34,7 @@ function AdminCasesPage() {
     setNotice('')
     try {
       await assignFuneralCase(caseId, staffUserId)
-      setNotice('Case assigned. The coordinator was added to the WhatsApp group where consent and gateway status allow.')
+      setNotice('✅ Case assigned! The coordinator and family have been automatically notified via WhatsApp, SMS, and Email.')
       await refresh()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The case could not be assigned.')

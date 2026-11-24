@@ -22,11 +22,20 @@ export function SiteFooter() {
           <div key={column.title}>
             <h2>{column.title}</h2>
             <ul>
-              {column.links.map((link) => (
-                <li key={link.label}>
-                  <Link to={link.to}>{link.label}</Link>
-                </li>
-              ))}
+              {column.links.map((link) => {
+                const isExternal = link.to.startsWith('http://') || link.to.startsWith('https://')
+                return (
+                  <li key={link.label}>
+                    {isExternal ? (
+                      <a href={link.to} target="_blank" rel="noreferrer">
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link to={link.to}>{link.label}</Link>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           </div>
         ))}

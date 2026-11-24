@@ -37,7 +37,7 @@ export type RequestKind = 'bereavement' | 'claim' | 'general'
 
 export type RequestStatus = 'received' | 'assigned' | 'in_progress' | 'complete'
 
-export type ContactPreference = 'call' | 'whatsapp' | 'sms'
+export type ContactPreference = 'call' | 'whatsapp' | 'sms' | 'email'
 
 /** What a funeral service provider has done with a request an administrator handed to them. */
 export type AssignmentStatus = 'assigned' | 'accepted' | 'declined' | 'completed'
@@ -91,9 +91,10 @@ export const REQUEST_STEPS: { value: RequestStatus; label: string }[] = [
 ]
 
 export const CONTACT_OPTIONS: { value: ContactPreference; label: string }[] = [
-  { value: 'call', label: 'Phone call' },
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'sms', label: 'SMS' },
+  { value: 'email', label: 'Email' },
+  { value: 'call', label: 'Phone call' },
 ]
 
 export const MESSAGE_MAX_LENGTH = 600

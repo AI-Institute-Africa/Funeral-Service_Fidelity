@@ -18,11 +18,13 @@ type RequestSheetProps = {
   onClose: () => void
 }
 
-const contactLabel = (value: string) => CONTACT_OPTIONS.find((option) => option.value === value)?.label ?? value
+const contactLabel = (value?: string) =>
+  (value && CONTACT_OPTIONS.find((option) => option.value === value)?.label) ?? value ?? 'Phone call'
 
 export function RequestSheet({ request, onClose }: RequestSheetProps) {
+  const title = request ? (requestKindLabel[request.kind] ?? request.kind ?? 'Assistance Request') : 'Request'
   return (
-    <Sheet open={Boolean(request)} onClose={onClose} eyebrow={request?.reference} title={request ? requestKindLabel[request.kind] : 'Request'}>
+    <Sheet open={Boolean(request)} onClose={onClose} eyebrow={request?.reference} title={title}>
       {request && <RequestBody request={request} />}
     </Sheet>
   )
@@ -31,8 +33,11 @@ export function RequestSheet({ request, onClose }: RequestSheetProps) {
 function RequestBody({ request }: { request: AdminRequest }) {
   const role = usePortalRole()
   const respond = useRespondToRequest()
-  const status = requestStatusDisplay[request.status]
-  const responses = request.actions.filter((action): action is 'accepted' | 'declined' | 'completed' => action !== 'assign')
+  const status = requestStatusDisplay[request.status] ?? { tone: 'info', label: request.status || 'Received' }
+  const responses = (request.actions || []).filter((action): action is 'accepted' | 'declined' | 'completed' => action !== 'assign')
+  const assignmentStatus = request.assignment
+    ? (assignmentDisplay[request.assignment.status] ?? { tone: 'info', label: request.assignment.status })
+    : null
 
   return (
     <>
@@ -46,11 +51,11 @@ function RequestBody({ request }: { request: AdminRequest }) {
         <dl className="kv">
           <div>
             <dt>Name</dt>
-            <dd>{request.customer.name}</dd>
+            <dd>{request.customer?.name || 'Customer'}</dd>
           </div>
           <div>
             <dt>Phone</dt>
-            <dd>{formatPhone(request.customer.phone)}</dd>
+            <dd>{formatPhone(request.customer?.phone || '')}</dd>
           </div>
           <div>
             <dt>Prefers</dt>
@@ -59,7 +64,11 @@ function RequestBody({ request }: { request: AdminRequest }) {
           {role === 'admin' && (
             <div>
               <dt>Policy</dt>
-              <dd>{request.customer.policyNumber ? `${request.customer.policyNumber} (${request.customer.policyStatus})` : 'No policy linked'}</dd>
+              <dd>
+                {request.customer?.policyNumber
+                  ? `${request.customer.policyNumber} (${request.customer.policyStatus || 'Active'})`
+                  : 'No policy linked'}
+              </dd>
             </div>
           )}
           <div>
@@ -73,10 +82,14 @@ function RequestBody({ request }: { request: AdminRequest }) {
 
       <section className="sheet-section" aria-labelledby="message-title">
         <h3 id="message-title">What they said</h3>
-        {request.message ? <blockquote className="quote">“{request.message}”</blockquote> : <p className="muted">They didn’t leave a message. Please call.</p>}
+        {request.message ? (
+          <blockquote className="quote">“{request.message}”</blockquote>
+        ) : (
+          <p className="muted">They didn’t leave a message. Please call.</p>
+        )}
       </section>
 
-      {request.assignment && (
+      {request.assignment && assignmentStatus && (
         <section className="sheet-section" aria-labelledby="assignment-title">
           <h3 id="assignment-title">Handled by</h3>
           <dl className="kv">
@@ -87,7 +100,7 @@ function RequestBody({ request }: { request: AdminRequest }) {
             <div>
               <dt>Status</dt>
               <dd>
-                <StatusChip tone={assignmentDisplay[request.assignment.status].tone}>{assignmentDisplay[request.assignment.status].label}</StatusChip>
+                <StatusChip tone={assignmentStatus.tone}>{assignmentStatus.label}</StatusChip>
               </dd>
             </div>
             <div>
@@ -105,7 +118,7 @@ function RequestBody({ request }: { request: AdminRequest }) {
         </section>
       )}
 
-      {request.actions.includes('assign') && <AssignForm request={request} />}
+      {(request.actions || []).includes('assign') && <AssignForm request={request} />}
 
       {respond.error && (
         <Callout tone="danger" role="alert">
@@ -121,7 +134,9 @@ function RequestBody({ request }: { request: AdminRequest }) {
               <button
                 key={action}
                 type="button"
-                className={`btn btn--sm ${action === 'declined' ? 'btn--outline' : action === 'completed' && role === 'admin' ? 'btn--outline' : 'btn--primary'}`}
+                className={`btn btn--sm ${
+                  action === 'declined' ? 'btn--outline' : action === 'completed' && role === 'admin' ? 'btn--outline' : 'btn--primary'
+                }`}
                 disabled={respond.isPending}
                 onClick={() => respond.mutate({ id: request.id, status: action })}
               >
@@ -136,51 +151,73 @@ function RequestBody({ request }: { request: AdminRequest }) {
   )
 }
 
+const FIDELITY_STAFF_MEMBERS = [
+  { id: 'staff-chikwanha', name: 'Tariro Chikwanha', role: 'Senior Funeral Director & Case Lead', phone: '+263790499962' },
+  { id: 'staff-gumbo', name: 'Farai Gumbo', role: 'Mortuary & Logistics Coordinator', phone: '+263772555666' },
+  { id: 'staff-bmoyo', name: 'Blessing Moyo', role: 'Field Officer & Fleet Operations', phone: '+263771888999' },
+  { id: 'staff-dube', name: 'Chipo Dube', role: 'Chapel & Ceremony Coordinator', phone: '+263773000222' },
+  { id: 'staff-ndlovu', name: 'Nomsa Ndlovu', role: 'Head of Funeral Operations', phone: '+263773000333' },
+]
+
 function AssignForm({ request }: { request: AdminRequest }) {
-  const providers = useProviders()
   const assign = useAssignRequest()
-  const [providerId, setProviderId] = useState('')
+  const [staffId, setStaffId] = useState('')
   const [note, setNote] = useState('')
   const [problem, setProblem] = useState<string>()
 
-  const choices = (providers.data ?? []).filter((provider) => provider.isActive)
   const reassign = Boolean(request.assignment) && request.assignment?.status !== 'declined'
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!providerId) {
-      setProblem('Choose who should take this on.')
+    if (!staffId) {
+      setProblem('Choose a Fidelity Staff member.')
       return
     }
     setProblem(undefined)
-    assign.mutate({ id: request.id, providerId, note: note.trim() || undefined })
+    const chosenStaff = FIDELITY_STAFF_MEMBERS.find((s) => s.id === staffId)
+    assign.mutate({ id: request.id, providerId: staffId, note: note.trim() || undefined })
+    if (chosenStaff) {
+      void fetch('/api/whatsapp/notify-assignment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caseReference: request.reference,
+          coordinatorName: chosenStaff.name,
+          customerName: request.customer?.name,
+          customerPhone: request.customer?.phone,
+          notes: note.trim() || undefined,
+        }),
+      }).catch(() => {})
+    }
   }
 
   return (
     <form className="sheet-section" onSubmit={submit} noValidate aria-labelledby="assign-title">
-      <h3 id="assign-title">{reassign ? 'Hand it to someone else' : 'Assign a provider'}</h3>
+      <h3 id="assign-title">{reassign ? 'Reassign to another staff member' : 'Assign Fidelity Staff Member'}</h3>
+      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', padding: '0.6rem 0.75rem', fontSize: '0.825rem', color: '#991b1b', marginBottom: '0.75rem' }}>
+        <strong>🔒 Policy:</strong> People assigned to cases must be verified Fidelity Staff members only.
+      </div>
       {request.assignment?.status === 'declined' && (
         <Callout tone="warning" role="status">
-          {request.assignment.providerName} declined this one. Choose another provider.
+          Previous assignment was declined. Choose another Fidelity staff member.
         </Callout>
       )}
 
       <div className="field">
-        <label className="field__label" htmlFor="assign-provider">
-          Provider
+        <label className="field__label" htmlFor="assign-staff">
+          Fidelity Staff Member
         </label>
         <select
-          id="assign-provider"
+          id="assign-staff"
           className="select"
-          value={providerId}
-          onChange={(event) => setProviderId(event.target.value)}
+          value={staffId}
+          onChange={(event) => setStaffId(event.target.value)}
           aria-invalid={problem ? true : undefined}
-          disabled={!providers.data}
         >
-          <option value="">{providers.data ? 'Choose a provider' : 'Loading providers…'}</option>
-          {choices.map((provider) => (
-            <option key={provider.id} value={provider.id}>
-              {provider.name} · {provider.providerType}, {provider.city}
+          <option value="">Select Fidelity Staff member…</option>
+          {FIDELITY_STAFF_MEMBERS.map((staff) => (
+            <option key={staff.id} value={staff.id}>
+              {staff.name} · {staff.role} ({staff.phone})
             </option>
           ))}
         </select>
@@ -193,9 +230,17 @@ function AssignForm({ request }: { request: AdminRequest }) {
 
       <div className="field">
         <label className="field__label" htmlFor="assign-note">
-          Note for the provider <small className="field__tag">Optional</small>
+          Task instructions / internal briefing <small className="field__tag">Optional</small>
         </label>
-        <textarea id="assign-note" className="textarea" rows={3} maxLength={300} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Anything they should know before they call." />
+        <textarea
+          id="assign-note"
+          className="textarea"
+          rows={3}
+          maxLength={300}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="Briefing notes for the assigned Fidelity officer."
+        />
         <small className="field__hint">The family never sees this note.</small>
       </div>
 
@@ -207,7 +252,7 @@ function AssignForm({ request }: { request: AdminRequest }) {
 
       <div>
         <button type="submit" className="btn btn--primary btn--sm" disabled={assign.isPending}>
-          {assign.isPending ? 'Assigning…' : reassign ? 'Reassign' : 'Assign'}
+          {assign.isPending ? 'Assigning…' : reassign ? 'Reassign Staff' : 'Assign Fidelity Staff'}
         </button>
       </div>
     </form>

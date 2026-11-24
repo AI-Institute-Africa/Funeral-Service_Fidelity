@@ -69,6 +69,18 @@ export function VerificationPanel({ item, actor, isAdmin, canManage, commit }: P
 
   function submitForReview() {
     commit(chemaStore.submitForVerification(item.id, actor), 'Case submitted for community verification. Public sharing remains disabled.')
+    try {
+      void fetch('/api/whatsapp/notify-chema', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'verification_submitted',
+          caseRef: item.caseRef,
+          deceasedName: item.deceasedName || '',
+          contributorName: actor.name,
+        }),
+      })
+    } catch (_) {}
   }
 
   function decide(decision: 'approved' | 'returned' | 'rejected') {
@@ -311,7 +323,23 @@ export function PayoutsPanel({ item, state, actor, canManage, canApprove, commit
     if (!Number.isFinite(amount) || amount <= 0) return
     const result = chemaStore.requestPayout(item.id, { amount, purpose: form.purpose, destination: form.destination, note: form.note }, actor)
     commit(result, 'Payout request submitted. It now needs independent approval before anything is sent to a provider.')
-    if (result.ok) setForm({ amount: '', purpose: '', destination: '', note: '' })
+    if (result.ok) {
+      try {
+        void fetch('/api/whatsapp/notify-chema', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'disbursement',
+            caseRef: item.caseRef,
+            deceasedName: item.deceasedName || '',
+            amount,
+            purpose: form.purpose,
+            destination: form.destination,
+          }),
+        })
+      } catch (_) {}
+      setForm({ amount: '', purpose: '', destination: '', note: '' })
+    }
   }
 
   return (
@@ -389,7 +417,7 @@ export function LedgerPanel({ item, state }: PanelProps) {
     <div className="cw-tab-grid">
       <section className="cw-panel" aria-labelledby="cw-ledger-title">
         <div className="cw-panel__head">
-          <div><p className="cw-eyebrow">Source-separated records</p><h2 id="cw-ledger-title" className="cw-panel__title">Community ledger</h2></div>
+          <div><p className="cw-eyebrow">Source-separated records</p><h2 id="cw-ledger-title" className="cw-panel__title">Chema Wallet</h2></div>
           <button type="button" className="btn btn--outline btn--sm" onClick={exportLedger}><Icon name="download" size={16} /> Export CSV</button>
         </div>
         <p className="cw-panel__lead">Every financial event posts a balanced pair. Entries are append-only: corrections create linked reversals rather than editing history.</p>

@@ -1,19 +1,26 @@
-export const formatUsd = (amount: number) => `US$${amount.toLocaleString('en-US')}`
+export const formatUsd = (amount: number) => `US$${(amount || 0).toLocaleString('en-US')}`
 
 const dateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
-export const formatDate = (value: string | Date) => dateFormat.format(new Date(value))
+export const formatDate = (value: string | Date | undefined | null) => {
+  if (!value) return ''
+  const d = new Date(value)
+  return isNaN(d.getTime()) ? '' : dateFormat.format(d)
+}
 
 /** The next date a premium falls due: this month's payment day, or next month's if it has passed. */
 export function nextDueDate(paymentDay: number, from: Date = new Date()): Date {
-  const due = new Date(from.getFullYear(), from.getMonth(), paymentDay)
+  const due = new Date(from.getFullYear(), from.getMonth(), paymentDay || 1)
   if (due < new Date(from.getFullYear(), from.getMonth(), from.getDate())) due.setMonth(due.getMonth() + 1)
   return due
 }
 
 /** "3 days ago", "yesterday", "today" for a past ISO timestamp. */
-export function formatRelativeDays(iso: string, now: Date = new Date()): string {
-  const days = Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000)
+export function formatRelativeDays(iso?: string | null, now: Date = new Date()): string {
+  if (!iso) return 'recently'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return 'recently'
+  const days = Math.floor((now.getTime() - d.getTime()) / 86_400_000)
   if (days <= 0) return 'today'
   if (days === 1) return 'yesterday'
   return `${days} days ago`
@@ -21,7 +28,7 @@ export function formatRelativeDays(iso: string, now: Date = new Date()): string 
 
 /** Two-letter initials for an avatar. */
 export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return '?'
   const first = parts[0]![0]!
   const last = parts.length > 1 ? parts[parts.length - 1]![0]! : ''
@@ -39,7 +46,11 @@ export function ordinal(n: number): string {
 const dayFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 
 /** Formats a calendar day (`YYYY-MM-DD`) without letting the viewer's timezone shift it by one. */
-export const formatDay = (isoDay: string) => dayFormat.format(new Date(`${isoDay.slice(0, 10)}T00:00:00Z`))
+export const formatDay = (isoDay?: string | null) => {
+  if (!isoDay) return ''
+  const d = new Date(`${isoDay.slice(0, 10)}T00:00:00Z`)
+  return isNaN(d.getTime()) ? isoDay : dayFormat.format(d)
+}
 
 const dateTimeFormat = new Intl.DateTimeFormat('en-GB', {
   weekday: 'long',
@@ -52,11 +63,19 @@ const dateTimeFormat = new Intl.DateTimeFormat('en-GB', {
 })
 
 /** "Wednesday, 10 September, 10:00" in Zimbabwe time, whatever the viewer's timezone. */
-export const formatServiceTime = (iso: string) => dateTimeFormat.format(new Date(iso))
+export const formatServiceTime = (iso?: string | null) => {
+  if (!iso) return 'Not set'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return 'Not set'
+  return dateTimeFormat.format(d)
+}
 
 /** "12 minutes ago", "3 hours ago", "2 days ago": for lists where recent time matters (triage queues). */
-export function formatAge(iso: string, now: Date = new Date()): string {
-  const minutes = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 60_000))
+export function formatAge(iso?: string | null, now: Date = new Date()): string {
+  if (!iso) return 'recently'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return 'recently'
+  const minutes = Math.max(0, Math.round((now.getTime() - d.getTime()) / 60_000))
   if (minutes < 1) return 'just now'
   if (minutes < 60) return `${minutes} min ago`
   const hours = Math.round(minutes / 60)

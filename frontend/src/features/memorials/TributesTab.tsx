@@ -16,7 +16,7 @@ export function TributesTab({ memorial }: { memorial: OwnedMemorial }) {
         isPending={tributes.isPending}
         error={tributes.error}
         onRetry={() => void tributes.refetch()}
-        noun="tributes"
+        noun="messages in loving memory"
         skeleton
       />
     )
@@ -39,7 +39,7 @@ export function TributesTab({ memorial }: { memorial: OwnedMemorial }) {
           <h2 id="pending-title" className="panel__title">
             Waiting for you {pending.length > 0 && <span className="count-pill">{pending.length}</span>}
           </h2>
-          <p className="muted">Visitors’ tributes only appear on the page once you approve them.</p>
+          <p className="muted">Visitors’ messages in loving memory only appear on the page once you approve them.</p>
         </div>
 
         {pending.length === 0 ? (
@@ -69,7 +69,7 @@ export function TributesTab({ memorial }: { memorial: OwnedMemorial }) {
           On the page
         </h2>
         {approved.length === 0 ? (
-          <p className="muted">Approved tributes will be listed here.</p>
+          <p className="muted">Approved messages in loving memory will be listed here.</p>
         ) : (
           <ul className="moderation">
             {approved.map((tribute) => (
@@ -91,7 +91,7 @@ export function TributesTab({ memorial }: { memorial: OwnedMemorial }) {
 
 function TributeBody({ tribute }: { tribute: Tribute }) {
   return (
-    <div className="moderation__body">
+    <div>
       <p>“{tribute.message}”</p>
       <p className="muted">
         <strong>{tribute.authorName}</strong>

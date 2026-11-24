@@ -20,11 +20,14 @@ const labels: Record<OfferingKind, { icon: IconName; action: string; thanks: str
 
 /** Flower and candle buttons, with a small garden that fills as people leave them. */
 export function OfferingsCard({ memorial }: { memorial: Memorial }) {
-  const offering = useOffering(memorial.slug)
+  const offering = useOffering(memorial.slug || memorial.id)
   const [bursts, setBursts] = useState<Burst[]>([])
   const [announcement, setAnnouncement] = useState('')
   const nextBurst = useRef(0)
   const timers = useRef<number[]>([])
+
+  const flowers = memorial.flowers ?? 0
+  const candles = memorial.candles ?? 0
 
   useEffect(() => {
     const pending = timers.current
@@ -43,8 +46,8 @@ export function OfferingsCard({ memorial }: { memorial: Memorial }) {
   }
 
   const garden = [
-    ...Array.from({ length: Math.min(memorial.flowers, GARDEN_FLOWERS) }, (_, index) => ({ kind: 'flower' as const, index })),
-    ...Array.from({ length: Math.min(memorial.candles, GARDEN_CANDLES) }, (_, index) => ({ kind: 'candle' as const, index })),
+    ...Array.from({ length: Math.min(flowers, GARDEN_FLOWERS) }, (_, index) => ({ kind: 'flower' as const, index })),
+    ...Array.from({ length: Math.min(candles, GARDEN_CANDLES) }, (_, index) => ({ kind: 'candle' as const, index })),
   ]
 
   return (
@@ -67,7 +70,7 @@ export function OfferingsCard({ memorial }: { memorial: Memorial }) {
             <span className="offering__text">
               <strong>{labels[kind].action}</strong>
               <span>
-                {(kind === 'flower' ? memorial.flowers : memorial.candles).toLocaleString('en-US')}{' '}
+                {(kind === 'flower' ? flowers : candles).toLocaleString('en-US')}{' '}
                 {kind === 'flower' ? 'flowers' : 'candles'}
               </span>
             </span>

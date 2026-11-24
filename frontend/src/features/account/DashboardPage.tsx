@@ -7,7 +7,7 @@ import { useAuth } from '@/features/auth'
 import { OrdersSummaryCard } from '@/features/marketplace'
 import { MemorialsSummaryCard } from '@/features/memorials'
 import { greeting, statusDisplay } from './cover'
-import { NextActions, NoPolicyCard } from './DashboardPanels'
+import { NextActions, NoPolicyCard, ChemaWalletAccountCard } from './DashboardPanels'
 import { LinkedCelebration } from './LinkedCelebration'
 import { PolicyCard } from './PolicyCard'
 import { usePolicy, useRequests } from './queries'
@@ -112,13 +112,12 @@ export default function DashboardPage() {
         </div>
 
         <div className="dashboard__side">
-          <div className="reveal" style={{ '--i': 3 } as React.CSSProperties}>
-            <NextActions hasPolicy={Boolean(policy)} />
+          <div className="reveal" style={{ '--i': 3 } as React.CSSProperties}>`r`n            <ChemaWalletAccountCard phone={user?.phone} />`r`n          </div>`r`n          <div className="reveal" style={{ '--i': 6 } as React.CSSProperties}>`r`n            <NextActions hasPolicy={Boolean(policy)} />
           </div>
-          <div className="reveal" style={{ '--i': 4 } as React.CSSProperties}>
+          <div className="reveal" style={{ '--i': 6 } as React.CSSProperties}>
             <MemorialsSummaryCard />
           </div>
-          <div className="reveal" style={{ '--i': 5 } as React.CSSProperties}>
+          <div className="reveal" style={{ '--i': 6 } as React.CSSProperties}>
             <OrdersSummaryCard />
           </div>
         </div>

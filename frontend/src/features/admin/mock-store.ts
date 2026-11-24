@@ -256,7 +256,8 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   paid: 'Paid',
   confirmed: 'Confirmed',
   in_progress: 'In progress',
-  delivered: 'Delivered',
+  delivered: 'Closed',
+  closed: 'Closed',
   cancelled: 'Cancelled',
 }
 

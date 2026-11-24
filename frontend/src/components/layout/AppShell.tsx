@@ -7,6 +7,8 @@ import { paths } from '@/config/routes'
 import type { AccountNavItem } from '@/config/site'
 import { useAuth, useSignOutAndLeave } from '@/features/auth'
 import { CartButton } from '@/features/marketplace'
+import { KuwanaBadge } from '@/features/account/KuwanaBadge'
+import { ErrorBoundary } from '@/app/ErrorBoundary'
 import { Brand } from './Brand'
 import './account-layout.css'
 
@@ -51,6 +53,7 @@ export function AppShell({ brandTo, subtitle, navLabel, nav, aside, showCart = f
           <Brand to={brandTo} subtitle={subtitle} />
 
           <div className="site-header__actions">
+            <KuwanaBadge />
             {showCart && <CartButton />}
             <Link className="btn btn--outline btn--sm account-header__site" to={paths.home}>
               Back to website
@@ -73,34 +76,54 @@ export function AppShell({ brandTo, subtitle, navLabel, nav, aside, showCart = f
         <aside className="account-side">
           <nav aria-label={navLabel}>
             <ul className="account-nav">
-              {nav.map((item) => (
-                <li key={item.to}>
-                  <NavLink to={item.to} end={item.end} className="account-nav__link">
-                    <Icon name={item.icon} size={20} />
-                    {item.label}
-                  </NavLink>
-                </li>
-              ))}
+              {nav.map((item) => {
+                const isExternal = item.to.startsWith('http://') || item.to.startsWith('https://')
+                return (
+                  <li key={item.to}>
+                    {isExternal ? (
+                      <a href={item.to} className="account-nav__link" target="_blank" rel="noreferrer">
+                        <Icon name={item.icon} size={20} />
+                        {item.label}
+                      </a>
+                    ) : (
+                      <NavLink to={item.to} end={item.end} className="account-nav__link">
+                        <Icon name={item.icon} size={20} />
+                        {item.label}
+                      </NavLink>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           </nav>
           {aside}
         </aside>
 
         <main className="account-main" id="main-content">
-          <Suspense fallback={<PageSkeleton label={loadingLabel} />}>
-            <Outlet />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<PageSkeleton label={loadingLabel} />}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
           {aside && <div className="account-aside-mobile">{aside}</div>}
         </main>
       </div>
 
       <nav className="account-tabbar" aria-label={navLabel} style={{ '--tabs': nav.length } as CSSProperties}>
-        {nav.map((item) => (
-          <NavLink key={item.to} to={item.to} end={item.end} className="account-tabbar__link">
-            <Icon name={item.icon} size={22} />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
+        {nav.map((item) => {
+          const isExternal = item.to.startsWith('http://') || item.to.startsWith('https://')
+          return isExternal ? (
+            <a key={item.to} href={item.to} className="account-tabbar__link" target="_blank" rel="noreferrer">
+              <Icon name={item.icon} size={22} />
+              <span>{item.label}</span>
+            </a>
+          ) : (
+            <NavLink key={item.to} to={item.to} end={item.end} className="account-tabbar__link">
+              <Icon name={item.icon} size={22} />
+              <span>{item.label}</span>
+            </NavLink>
+          )
+        })}
       </nav>
     </div>
   )

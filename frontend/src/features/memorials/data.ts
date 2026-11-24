@@ -117,12 +117,14 @@ export function uniqueSlug(name: string, taken: Iterable<string>): string {
 }
 
 /** "1949 – 2025" */
-export function lifespan(born: string, died: string): string {
+export function lifespan(born?: string | null, died?: string | null): string {
+  if (!born || !died) return ''
   return `${born.slice(0, 4)} – ${died.slice(0, 4)}`
 }
 
 /** Whole years lived, or null when the dates don't make sense. */
-export function ageAtDeath(born: string, died: string): number | null {
+export function ageAtDeath(born?: string | null, died?: string | null): number | null {
+  if (!born || !died) return null
   const birth = new Date(`${born}T00:00:00Z`)
   const death = new Date(`${died}T00:00:00Z`)
   if (Number.isNaN(birth.getTime()) || Number.isNaN(death.getTime()) || death < birth) return null
@@ -134,8 +136,8 @@ export function ageAtDeath(born: string, died: string): number | null {
   return age
 }
 
-export const biographyParagraphs = (biography: string): string[] =>
-  biography
+export const biographyParagraphs = (biography?: string | null): string[] =>
+  (biography || '')
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
@@ -143,14 +145,17 @@ export const biographyParagraphs = (biography: string): string[] =>
 export type MemorialStep = { id: string; label: string; done: boolean }
 
 /** How finished a memorial is, as a checklist the owner can work through. */
-export function completeness(memorial: Memorial): { percent: number; steps: MemorialStep[] } {
+export function completeness(memorial?: Memorial | null): { percent: number; steps: MemorialStep[] } {
+  if (!memorial) return { percent: 0, steps: [] }
+  const timeline = Array.isArray(memorial.timeline) ? memorial.timeline : []
+  const photos = Array.isArray(memorial.photos) ? memorial.photos : []
   const steps: MemorialStep[] = [
     { id: 'portrait', label: 'Choose a portrait', done: Boolean(memorial.portraitId) },
-    { id: 'tagline', label: 'Add a line in their memory', done: Boolean(memorial.tagline?.trim()) },
+    { id: 'tagline', label: 'Add a line in their memory', done: Boolean(memorial.tagline?.trim?.()) },
     { id: 'story', label: 'Write their life story', done: biographyParagraphs(memorial.biography).length > 0 },
-    { id: 'timeline', label: 'Add three moments to the timeline', done: memorial.timeline.length >= 3 },
-    { id: 'photos', label: 'Share three photos', done: memorial.photos.length >= 3 },
-    { id: 'service', label: 'Add the service details', done: Boolean(memorial.service?.venue.trim()) },
+    { id: 'timeline', label: 'Add three moments to the timeline', done: timeline.length >= 3 },
+    { id: 'photos', label: 'Share three photos', done: photos.length >= 3 },
+    { id: 'service', label: 'Add the service details', done: Boolean(memorial.service?.venue?.trim?.()) },
   ]
   const done = steps.filter((step) => step.done).length
   return { percent: Math.round((done / steps.length) * 100), steps }
@@ -158,7 +163,7 @@ export function completeness(memorial: Memorial): { percent: number; steps: Memo
 
 /** Newest first, approved only: what the public wall shows. */
 export function approvedTributes(tributes: Tribute[]): Tribute[] {
-  return tributes
+  return (tributes ?? [])
     .filter((tribute) => tribute.status === 'approved')
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }

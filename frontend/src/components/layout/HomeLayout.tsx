@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom'
+import { ErrorBoundary } from '@/app/ErrorBoundary'
 import { HomeHeader } from './HomeHeader'
 import { SampleNotice } from './SampleNotice'
 import { SiteFooter } from './SiteFooter'
@@ -12,7 +13,9 @@ export function HomeLayout() {
       <SampleNotice />
       <HomeHeader />
       <main id="main-content">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
       <SiteFooter />
     </div>

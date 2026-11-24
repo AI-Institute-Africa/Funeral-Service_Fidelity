@@ -1,4 +1,4 @@
-import type { StatusTone } from '@/components/ui/StatusChip'
+﻿import type { StatusTone } from '@/components/ui/StatusChip'
 import type { AssignmentStatus, RequestStatus } from '@/features/account/data'
 import { useAuth } from '@/features/auth'
 import type { OrderStatus } from '@/features/marketplace/data'
@@ -31,8 +31,9 @@ export const orderActionLabel: Record<OrderStatus, string> = {
   payment_failed: 'Payment failed',
   paid: 'Paid',
   confirmed: 'Confirm order',
-  in_progress: 'Start preparing',
-  delivered: 'Mark delivered',
+  in_progress: 'Mark In Progress',
+  delivered: 'Mark Closed',
+  closed: 'Mark Closed',
   cancelled: 'Cancel order',
 }
 

@@ -20,7 +20,11 @@ export async function requestOtp(phone: string): Promise<OtpReceipt> {
 }
 
 export async function signIn(input: SignInInput): Promise<User> {
-  if (!env.useMock) return post<User>('/auth/signin', input)
+  if (!env.useMock) {
+    const user = await post<User>('/auth/signin', input)
+    writeSessionUser(user)
+    return user
+  }
   const server = await mockServer()
   const user = server.signIn(input)
   writeSessionUser(user)
@@ -28,7 +32,11 @@ export async function signIn(input: SignInInput): Promise<User> {
 }
 
 export async function signUp(input: SignUpInput): Promise<User> {
-  if (!env.useMock) return post<User>('/auth/signup', input)
+  if (!env.useMock) {
+    const user = await post<User>('/auth/signup', input)
+    writeSessionUser(user)
+    return user
+  }
   const server = await mockServer()
   const user = server.signUp(input)
   writeSessionUser(user)
@@ -36,7 +44,11 @@ export async function signUp(input: SignUpInput): Promise<User> {
 }
 
 export async function signOut(): Promise<void> {
-  if (!env.useMock) return post<void>('/auth/signout', undefined)
+  if (!env.useMock) {
+    await post<void>('/auth/signout', undefined)
+    writeSessionUser(null)
+    return
+  }
   writeSessionUser(null)
 }
 
@@ -44,9 +56,16 @@ export async function signOut(): Promise<void> {
 export async function getMe(signal?: AbortSignal): Promise<User | null> {
   if (env.useMock) return readSessionUser()
   try {
-    return await get<User>('/me', { signal })
+    const user = await get<User>('/me', { signal })
+    if (user) {
+      writeSessionUser(user)
+    }
+    return user
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) return null
+    if (error instanceof ApiError && error.status === 401) {
+      writeSessionUser(null)
+      return null
+    }
     throw error
   }
 }

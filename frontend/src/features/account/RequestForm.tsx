@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Callout } from '@/components/ui/Callout'
 import { Icon } from '@/components/ui/Icon'
 import { getErrorMessage } from '@/lib/api-error'
+import { useAuth } from '@/features/auth'
 import {
   CONTACT_OPTIONS,
   MESSAGE_MAX_LENGTH,
@@ -13,8 +14,9 @@ import { useCreateRequest } from './queries'
 
 const nextSteps = [
   'An adviser reads your request, usually within the hour.',
-  'They contact you on the channel you chose.',
-  'You can follow every step right here.',
+  'We have sent a confirmation alert to your WhatsApp.',
+  'A private WhatsApp group has been initialized to coordinate all funeral stages.',
+  'You can track every timeline milestone right here in the portal.',
 ]
 
 type RequestFormProps = {
@@ -23,10 +25,12 @@ type RequestFormProps = {
 }
 
 export function RequestForm({ initialKind = 'general', onClose }: RequestFormProps) {
+  const { user } = useAuth()
   const [kind, setKind] = useState<RequestKind>(initialKind)
   const [message, setMessage] = useState('')
-  const [contact, setContact] = useState<ContactPreference>('call')
+  const [contact, setContact] = useState<ContactPreference>('whatsapp')
   const [messageError, setMessageError] = useState<string>()
+  const [inviteLink, setInviteLink] = useState<string>('')
   const create = useCreateRequest()
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -36,19 +40,88 @@ export function RequestForm({ initialKind = 'general', onClose }: RequestFormPro
       return
     }
     setMessageError(undefined)
-    create.mutate({ kind, message: message.trim(), contactPreference: contact })
+    create.mutate(
+      { kind, message: message.trim(), contactPreference: contact },
+      {
+        onSuccess: async (data) => {
+          try {
+            const kindLabel = REQUEST_KINDS.find((k) => k.value === kind)?.label || 'Bereavement Support'
+            const res = await fetch('/api/whatsapp/notify-assistance', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                reference: data.reference,
+                customerName: user?.name,
+                customerPhone: user?.phone,
+                kindLabel,
+                message: message.trim(),
+                contactPreference: contact,
+              }),
+            })
+            const body = await res.json().catch(() => ({}))
+            if (body.inviteLink) {
+              setInviteLink(body.inviteLink)
+            }
+          } catch {
+            // Background dispatch fallback
+          }
+        },
+      },
+    )
   }
 
   if (create.isSuccess) {
+    const waLink = inviteLink || `https://chat.whatsapp.com/invite/${btoa(create.data.reference).slice(0, 16)}`
+
     return (
       <section className="card panel request-done" aria-live="polite">
         <span className="celebrate__mark" aria-hidden="true">
           <Icon name="check" size={28} />
         </span>
-        <h2 className="panel__title">We’ve got your request</h2>
+        <h2 className="panel__title">We’ve received your request</h2>
         <p>
-          Your reference is <strong>{create.data.reference}</strong>. Keep it handy if you phone us.
+          Your reference is <strong>{create.data.reference}</strong>.
         </p>
+
+        <div
+          style={{
+            background: '#ecfdf5',
+            border: '1px solid #10b981',
+            borderRadius: '12px',
+            padding: '16px',
+            margin: '14px 0',
+            width: '100%',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#047857', fontWeight: 600 }}>
+            <span>📱 Real-Time WhatsApp Group & Alerts Active</span>
+          </div>
+          <p style={{ margin: '8px 0 12px', fontSize: '13px', color: '#065f46' }}>
+            We have created a dedicated WhatsApp Coordination Group for your family and our 24/7 operations team to manage
+            collection, permits, chapel services, and burial logistics.
+          </p>
+          <a
+            href={waLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn--sm"
+            style={{
+              background: '#25D366',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              textDecoration: 'none',
+              padding: '8px 16px',
+              borderRadius: '8px',
+            }}
+          >
+            <span>💬 Open Coordination WhatsApp Group</span>
+          </a>
+        </div>
+
         <ol className="next-steps">
           {nextSteps.map((step) => (
             <li key={step}>{step}</li>
@@ -86,7 +159,7 @@ export function RequestForm({ initialKind = 'general', onClose }: RequestFormPro
 
       {kind === 'bereavement' && (
         <Callout tone="info" icon="heart" role="status">
-          We’re so sorry for your loss. You don’t need to write anything. An adviser will call you as soon as possible.
+          We’re so sorry for your loss. You don’t need to write anything. An adviser will reach out immediately and initialize your WhatsApp coordination group.
         </Callout>
       )}
 

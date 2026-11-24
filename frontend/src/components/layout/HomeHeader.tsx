@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
 import { anchor, paths } from '@/config/routes'
+import { primaryNav } from '@/config/site'
 import { useAuth } from '@/features/auth'
 import { CartButton } from '@/features/marketplace'
+import { KuwanaBadge } from '@/features/account/KuwanaBadge'
 import { Brand } from './Brand'
 
 export function HomeHeader() {
@@ -95,6 +97,27 @@ export function HomeHeader() {
         <Brand to={anchor('top')} tone="auto" />
 
         <nav id="main-navigation" className={`site-nav${isMenuOpen ? ' is-open' : ''}`} aria-label="Main navigation">
+          <ul className="site-nav__links" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {primaryNav.map((item) => (
+              <li key={item.label}>
+                {item.to.startsWith('http') ? (
+                  <a
+                    href={item.to}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={closeMenu}
+                  >
+                    {item.label}
+                  </a>
+                ) : (
+                  <Link to={item.to} onClick={closeMenu}>
+                    {item.label}
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+
           {user ? (
             <Link className="site-nav__account" to={user.role === 'customer' ? paths.account : paths.provider} onClick={closeMenu}>
               <Avatar name={user.name} size="sm" />
@@ -112,6 +135,7 @@ export function HomeHeader() {
         </nav>
 
         <div className="site-header__cart">
+          <KuwanaBadge />
           <CartButton />
         </div>
 

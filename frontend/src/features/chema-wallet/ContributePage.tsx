@@ -156,6 +156,23 @@ export default function ContributePage() {
     setState(resolved.state)
     setResult(resolved.data)
     setStage(outcome === 'successful' ? 'success' : outcome === 'failed' ? 'failed' : 'pending')
+    if (outcome === 'successful') {
+      try {
+        void fetch('/api/whatsapp/notify-chema', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'contribution',
+            caseRef: item.caseRef,
+            deceasedName: publicName,
+            amount: value,
+            contributorName: anonymous ? 'Anonymous Supporter' : (name.trim() || 'Supporter'),
+            method,
+            message: message.trim(),
+          }),
+        })
+      } catch (_) {}
+    }
   }
 
   async function checkPending() {
@@ -218,7 +235,7 @@ export default function ContributePage() {
             <p className="cw-public__service">{item.funeralInfo}</p>
             <div className="cw-public__meta">
               <span>Case {item.caseRef}</span>
-              {item.funeralDate && <span>Funeral {new Date(item.funeralDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>}
+              {item.funeralDate && <span>Burial expected {new Date(item.funeralDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>}
               <span>{totals.contributorCount} {totals.contributorCount === 1 ? 'contributor' : 'contributors'}</span>
             </div>
           </div>
@@ -246,7 +263,7 @@ export default function ContributePage() {
               <p className="cw-eyebrow">About this fund</p>
               <h2 id="cw-public-about">One coordinated way for the community to help</h2>
               <p>
-                Family, friends, church members, workmates and diaspora contacts can contribute towards the funeral through this verified page. Every confirmed contribution receives a receipt and is recorded in a source-separated community ledger.
+                Family, friends, church members, workmates and diaspora contacts can contribute towards the funeral through this verified page. Every confirmed contribution receives a receipt and is recorded in a source-separated Chema Wallet.
               </p>
               <div className="cw-public__source-row">
                 <div><span className="cw-source-tag cw-source-tag--community">Community</span><strong>{money(totals.digitalTotal)}</strong><small>Confirmed digital contributions</small></div>
@@ -262,11 +279,11 @@ export default function ContributePage() {
             {item.privacy.showTributes && (
               <section className="cw-public__card" aria-labelledby="cw-tributes-title">
                 <div className="cw-public__card-head">
-                  <div><p className="cw-eyebrow">Messages of support</p><h2 id="cw-tributes-title">Tribute wall</h2></div>
+                  <div><p className="cw-eyebrow">Messages of support</p><h2 id="cw-tributes-title">In Loving Memory</h2></div>
                   <StatusChip tone="info">{tributes.length} published</StatusChip>
                 </div>
                 {recentTributes.length === 0 ? (
-                  <p className="cw-public__empty">The family has not published any tributes yet. Messages are reviewed before they appear here.</p>
+                  <p className="cw-public__empty">The family has not published any in loving memory messages yet. Messages are reviewed before they appear here.</p>
                 ) : (
                   <div className="cw-tributes">
                     {recentTributes.map((tribute) => {
@@ -293,7 +310,7 @@ export default function ContributePage() {
                 <li>Your payment is handed to an approved provider checkout. This demo never collects a PIN, OTP or card number.</li>
                 <li>If a payment is pending or unknown, it is not counted as money raised and cannot be paid out.</li>
                 <li>Anonymous display hides your name publicly; the payment and audit record still exist for authorised staff.</li>
-                <li>Your message appears only after moderation and only if the family allows tributes.</li>
+                <li>Your message appears only after moderation and only if the family allows in loving memory messages.</li>
                 <li>Community contributions are not Fidelity operating funds, policy premiums or claim proceeds.</li>
               </ul>
             </section>
@@ -408,7 +425,7 @@ export default function ContributePage() {
                     <div><dt>Status</dt><dd><StatusChip tone="success">Confirmed</StatusChip></dd></div>
                   </dl>
                   {result.message && <p className="cw-receipt__message">“{result.message}”</p>}
-                  {result.message && <p className="cw-inline-note"><Icon name="clock" size={14} /> Your message is held for moderation and will appear on the tribute wall only if the family allows it and a moderator approves it.</p>}
+                  {result.message && <p className="cw-inline-note"><Icon name="clock" size={14} /> Your message is held for moderation and will appear on the In Loving Memory wall only if the family allows it and a moderator approves it.</p>}
                   <div className="cw-receipt__notice">No real money was processed. This receipt is a demonstration record and does not confirm insurance cover, a claim or a Fidelity benefit.</div>
                   <div className="cw-action-row">
                     <button type="button" className="btn btn--primary btn--sm" onClick={() => window.print()}>Print receipt</button>

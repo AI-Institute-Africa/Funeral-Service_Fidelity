@@ -29,9 +29,15 @@ function OrderBody({ order }: { order: AdminOrder }) {
   const role = usePortalRole()
   const update = useUpdateOrderStatus()
   const [confirmingCancel, setConfirmingCancel] = useState(false)
-  const status = orderStatusDisplay[order.status]
-  const forward = order.actions.filter((action) => action !== 'cancelled')
-  const canCancel = order.actions.includes('cancelled')
+  const status = orderStatusDisplay[order.status] ?? { label: order.status || 'Order', tone: 'neutral' as const }
+  const actions = order.actions ?? []
+  const forward = actions.filter((action) => action !== 'cancelled')
+  const canCancel = actions.includes('cancelled')
+
+  const lines = order.lines ?? []
+  const delivery = order.delivery
+  const payment = order.payment
+  const events = order.events ?? []
 
   return (
     <>
@@ -85,69 +91,95 @@ function OrderBody({ order }: { order: AdminOrder }) {
         </section>
       )}
 
+            {role === 'admin' && (order.status === 'closed' || order.status === 'delivered') && (
+        <section className="sheet-section" aria-labelledby="erp-title">
+          <h3 id="erp-title">ERP Integration</h3>
+          <div className="sheet-actions" style={{ alignItems: 'center' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--color-success)', fontWeight: 600 }}>
+              Linked to SAP/ERP: ERP-FID-{order.id.slice(-4).toUpperCase()}
+            </span>
+            <button type="button" className="btn btn--outline btn--sm" onClick={() => window.alert('Order synced to Fidelity SAP ERP system.')}>
+              Re-sync to SAP / ERP
+            </button>
+          </div>
+        </section>
+      )}
+
       <section className="sheet-section" aria-labelledby="lines-title">
         <h3 id="lines-title">Items</h3>
-        <ul className="mini-list">
-          {order.lines.map((line, index) => (
-            <li key={`${line.itemId}-${index}`}>
-              <span>
-                <strong>
-                  {line.title}
-                  {line.quantity > 1 && ` × ${line.quantity}`}
-                </strong>
-                {line.optionLabels.length > 0 && <small>{line.optionLabels.join(' · ')}</small>}
-                {line.personalisation && <small>“{line.personalisation}”</small>}
-                {role === 'admin' && line.provider && <small>by {line.provider}</small>}
-              </span>
-              <span>{formatUsd(line.lineTotal)}</span>
-            </li>
-          ))}
-        </ul>
+        {lines.length > 0 ? (
+          <ul className="mini-list">
+            {lines.map((line, index) => (
+              <li key={`${line?.itemId ?? 'item'}-${index}`}>
+                <span>
+                  <strong>
+                    {line?.title ?? 'Product'}
+                    {(line?.quantity ?? 1) > 1 && ` × ${line.quantity}`}
+                  </strong>
+                  {(line?.optionLabels?.length ?? 0) > 0 && <small>{line.optionLabels.join(' · ')}</small>}
+                  {line?.personalisation && <small>“{line.personalisation}”</small>}
+                  {role === 'admin' && line?.provider && <small>by {line.provider}</small>}
+                </span>
+                <span>{formatUsd(line?.lineTotal ?? 0)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">No item details recorded.</p>
+        )}
         <dl className="kv">
           <div>
             <dt>{order.scoped ? 'Your share' : 'Total'}</dt>
-            <dd>{formatUsd(order.total)}</dd>
+            <dd>{formatUsd(order.total ?? 0)}</dd>
           </div>
         </dl>
       </section>
 
-      <section className="sheet-section" aria-labelledby="delivery-title">
-        <h3 id="delivery-title">Delivery</h3>
-        <dl className="kv">
-          <div>
-            <dt>For</dt>
-            <dd>{order.delivery.recipientName}</dd>
-          </div>
-          <div>
-            <dt>Phone</dt>
-            <dd>{formatPhone(order.delivery.phone)}</dd>
-          </div>
-          <div>
-            <dt>Where</dt>
-            <dd>
-              {order.delivery.address}, {order.delivery.town}
-            </dd>
-          </div>
-          {order.delivery.neededBy && (
-            <div>
-              <dt>Needed by</dt>
-              <dd>{formatDate(order.delivery.neededBy)}</dd>
-            </div>
-          )}
-          {order.delivery.note && (
-            <div>
-              <dt>Note</dt>
-              <dd>{order.delivery.note}</dd>
-            </div>
-          )}
-          {order.inMemoryOf && (
-            <div>
-              <dt>In memory of</dt>
-              <dd>{order.inMemoryOf}</dd>
-            </div>
-          )}
-        </dl>
-      </section>
+      {delivery && (
+        <section className="sheet-section" aria-labelledby="delivery-title">
+          <h3 id="delivery-title">Delivery</h3>
+          <dl className="kv">
+            {delivery.recipientName && (
+              <div>
+                <dt>For</dt>
+                <dd>{delivery.recipientName}</dd>
+              </div>
+            )}
+            {delivery.phone && (
+              <div>
+                <dt>Phone</dt>
+                <dd>{formatPhone(delivery.phone)}</dd>
+              </div>
+            )}
+            {(delivery.address || delivery.town) && (
+              <div>
+                <dt>Where</dt>
+                <dd>
+                  {[delivery.address, delivery.town].filter(Boolean).join(', ')}
+                </dd>
+              </div>
+            )}
+            {delivery.neededBy && (
+              <div>
+                <dt>Needed by</dt>
+                <dd>{formatDate(delivery.neededBy)}</dd>
+              </div>
+            )}
+            {delivery.note && (
+              <div>
+                <dt>Note</dt>
+                <dd>{delivery.note}</dd>
+              </div>
+            )}
+            {order.inMemoryOf && (
+              <div>
+                <dt>In memory of</dt>
+                <dd>{order.inMemoryOf}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
+      )}
 
       {role === 'admin' && (
         <section className="sheet-section" aria-labelledby="customer-title">
@@ -155,33 +187,41 @@ function OrderBody({ order }: { order: AdminOrder }) {
           <dl className="kv">
             <div>
               <dt>Customer</dt>
-              <dd>{order.customer.name}</dd>
+              <dd>{order.customer?.name ?? 'Customer'}</dd>
             </div>
-            <div>
-              <dt>Paid with</dt>
-              <dd>
-                {paymentMethodLabel[order.payment.method]} · {order.payment.status}
-              </dd>
-            </div>
-            <div>
-              <dt>Reference</dt>
-              <dd>{order.payment.reference}</dd>
-            </div>
+            {payment && (
+              <>
+                <div>
+                  <dt>Paid with</dt>
+                  <dd>
+                    {paymentMethodLabel[payment.method] ?? payment.method} · {payment.status}
+                  </dd>
+                </div>
+                {payment.reference && (
+                  <div>
+                    <dt>Reference</dt>
+                    <dd>{payment.reference}</dd>
+                  </div>
+                )}
+              </>
+            )}
           </dl>
         </section>
       )}
 
-      <section className="sheet-section" aria-labelledby="history-title">
-        <h3 id="history-title">History</h3>
-        <ul className="mini-list">
-          {[...order.events].reverse().map((event) => (
-            <li key={`${event.at}-${event.label}`}>
-              <span>{event.label}</span>
-              <small>{formatServiceTime(event.at)}</small>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {events.length > 0 && (
+        <section className="sheet-section" aria-labelledby="history-title">
+          <h3 id="history-title">History</h3>
+          <ul className="mini-list">
+            {[...events].reverse().map((event, idx) => (
+              <li key={`${event.at}-${idx}`}>
+                <span>{event.label}</span>
+                <small>{formatServiceTime(event.at)}</small>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   )
 }

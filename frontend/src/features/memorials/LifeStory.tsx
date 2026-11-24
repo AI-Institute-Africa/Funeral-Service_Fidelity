@@ -19,7 +19,7 @@ export function LifeStory({ memorial, url }: { memorial: Memorial; url: string }
           {paragraphs.length > 0 ? (
             paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)
           ) : (
-            <p className="muted">The family hasn’t shared {memorial.name.split(' ')[0]}’s story yet.</p>
+            <p className="muted">The family hasn’t shared {(memorial.name || 'their').split(' ')[0]}’s story yet.</p>
           )}
         </div>
 
@@ -46,8 +46,8 @@ export function LifeStory({ memorial, url }: { memorial: Memorial; url: string }
 
           <div className="card service">
             <p className="eyebrow">Share this memorial</p>
-            <p className="muted">Let friends and family know where they can remember {memorial.name.split(' ')[0]}.</p>
-            <ShareActions name={memorial.name} url={url} />
+            <p className="muted">Let friends and family know where they can remember {(memorial.name || 'them').split(' ')[0]}.</p>
+            <ShareActions name={memorial.name || 'Memorial'} url={url} />
           </div>
         </aside>
       </div>
@@ -55,8 +55,9 @@ export function LifeStory({ memorial, url }: { memorial: Memorial; url: string }
   )
 }
 
-export function Timeline({ entries }: { entries: TimelineEntry[] }) {
-  if (entries.length === 0) return null
+export function Timeline({ entries }: { entries?: TimelineEntry[] }) {
+  const list = Array.isArray(entries) ? entries : []
+  if (list.length === 0) return null
 
   return (
     <section className="memorial-section" aria-labelledby="timeline-title">
@@ -66,7 +67,7 @@ export function Timeline({ entries }: { entries: TimelineEntry[] }) {
       </h2>
 
       <ol className="timeline">
-        {entries.map((entry, index) => (
+        {list.map((entry, index) => (
           <li key={entry.id} className="timeline__entry reveal" style={{ '--i': Math.min(index, 6) } as React.CSSProperties}>
             <span className="timeline__year">{entry.year}</span>
             <span className="timeline__dot" aria-hidden="true" />

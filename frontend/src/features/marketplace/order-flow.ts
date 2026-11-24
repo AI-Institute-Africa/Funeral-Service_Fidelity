@@ -8,7 +8,7 @@ import { normaliseEcocash } from './validation.ts'
 /** How long an EcoCash prompt takes to be answered, in the simulation. */
 export const PAYMENT_DELAY_MS = 4000
 /** After payment, how long until each stage, in the simulation. */
-export const STAGE_DELAYS_MS = { confirmed: 20_000, in_progress: 60_000, delivered: 150_000 } as const
+export const STAGE_DELAYS_MS = { confirmed: 20_000, in_progress: 60_000, delivered: 150_000, closed: 150_000 } as const
 /** This EcoCash number is always declined, so the failure path can be demonstrated. */
 export const DECLINED_ECOCASH = '+263780000000'
 
@@ -165,8 +165,8 @@ export function advanceOrder(record: OrderRecord, now: number): OrderRecord {
   const paidAt = Date.parse(current.payment.paidAt)
   const stages: [Exclude<OrderStatus, 'awaiting_payment' | 'payment_failed' | 'paid' | 'cancelled'>, string][] = [
     ['confirmed', `Confirmed by ${providersLabel(current)}`],
-    ['in_progress', 'Being prepared'],
-    ['delivered', 'Delivered'],
+    ['in_progress', 'In Progress'],
+    ['delivered', 'Closed'],
   ]
   for (const [status, label] of stages) {
     const due = paidAt + STAGE_DELAYS_MS[status]
@@ -183,8 +183,9 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   payment_failed: ['cancelled'],
   paid: ['confirmed', 'cancelled'],
   confirmed: ['in_progress', 'cancelled'],
-  in_progress: ['delivered', 'cancelled'],
-  delivered: [],
+  in_progress: ['delivered', 'closed', 'cancelled'],
+  delivered: ['closed'],
+  closed: [],
   cancelled: [],
 }
 

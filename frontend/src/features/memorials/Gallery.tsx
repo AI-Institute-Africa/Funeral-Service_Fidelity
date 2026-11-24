@@ -3,10 +3,11 @@ import { Icon } from '@/components/ui/Icon'
 import type { MemorialPhoto } from './data'
 
 /** A photo grid that opens into a full-screen viewer (native <dialog>: focus trap, Esc and backdrop for free). */
-export function Gallery({ photos, name }: { photos: MemorialPhoto[]; name: string }) {
+export function Gallery({ photos, name }: { photos?: MemorialPhoto[]; name: string }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const list = Array.isArray(photos) ? photos : []
 
-  if (photos.length === 0) return null
+  if (list.length === 0) return null
 
   return (
     <section className="memorial-section" aria-labelledby="gallery-title">
@@ -16,7 +17,7 @@ export function Gallery({ photos, name }: { photos: MemorialPhoto[]; name: strin
       </h2>
 
       <ul className="gallery">
-        {photos.map((photo, index) => (
+        {list.map((photo, index) => (
           <li key={photo.id} className="reveal" style={{ '--i': index } as React.CSSProperties}>
             <button type="button" className="gallery__item" onClick={() => setOpenIndex(index)}>
               <img src={photo.url} alt={photo.caption ?? `Photograph of ${name}`} loading="lazy" />
@@ -27,7 +28,7 @@ export function Gallery({ photos, name }: { photos: MemorialPhoto[]; name: strin
       </ul>
 
       {openIndex !== null && (
-        <Lightbox photos={photos} name={name} index={openIndex} onChange={setOpenIndex} onClose={() => setOpenIndex(null)} />
+        <Lightbox photos={list} name={name} index={openIndex} onChange={setOpenIndex} onClose={() => setOpenIndex(null)} />
       )}
     </section>
   )
@@ -46,8 +47,6 @@ function Lightbox({ photos, name, index, onChange, onClose }: LightboxProps) {
   const photo = photos[index]!
   const step = (direction: 1 | -1) => onChange((index + direction + photos.length) % photos.length)
 
-  // Unmounting a modal dialog removes it from the top layer, so there is nothing to clean up. (Calling close()
-  // here would fire a `close` event, which in StrictMode's double-run would immediately dismiss the viewer.)
   useEffect(() => {
     const element = dialog.current
     if (element && !element.open) element.showModal()

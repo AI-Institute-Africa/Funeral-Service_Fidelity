@@ -14,13 +14,13 @@ if (nodeEnv === 'production' && (jwtSecret === DEVELOPMENT_JWT_SECRET || jwtSecr
 }
 
 export const env = {
-  port: Number(process.env.PORT || 4000),
+  port: Number(process.env.PORT || 4001),
   nodeEnv,
   isProduction: nodeEnv === 'production',
   databaseUrl: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/funeral_service_dev?schema=public',
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  frontendOrigin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
+  frontendOrigin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000',
   databasePoolMax: Number(process.env.DATABASE_POOL_MAX || 5),
   queueSchema: process.env.PGBOSS_SCHEMA || 'pgboss',
   alerts: {

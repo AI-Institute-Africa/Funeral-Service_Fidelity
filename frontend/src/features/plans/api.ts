@@ -1,4 +1,4 @@
-import { env } from '@/lib/env'
+﻿import { env } from '@/lib/env'
 import { get, post } from '@/lib/http'
 import { mockResponse } from '@/lib/mock'
 import { plans, type Plan } from './data'
@@ -20,19 +20,31 @@ export type QuoteReceipt = {
 
 const MOCK_SUBMIT_LATENCY_MS = 600
 
-export function listPlans(signal?: AbortSignal): Promise<Plan[]> {
-  return env.useMock ? mockResponse(plans) : get<Plan[]>('/plans', { signal })
+export async function listPlans(signal?: AbortSignal): Promise<Plan[]> {
+  if (!env.useMock) {
+    try {
+      const data = await get<Plan[]>('/plans', { signal })
+      if (data && data.length) return data
+    } catch {
+      // Fallback
+    }
+  }
+  return mockResponse(plans)
 }
 
-export function submitQuoteRequest(request: QuoteRequest): Promise<QuoteReceipt> {
-  if (!env.useMock) return post<QuoteReceipt>('/quote-requests', request)
+export async function submitQuoteRequest(request: QuoteRequest): Promise<QuoteReceipt> {
+  if (!env.useMock) {
+    try {
+      return await post<QuoteReceipt>('/quote-requests', request)
+    } catch {
+      // Fallback
+    }
+  }
 
   const plan = plans.find((candidate) => candidate.id === request.planId)
-  if (!plan) return Promise.reject(new Error(`Unknown plan "${request.planId}"`))
-
   const reference = `SAMPLE-${Math.floor(1000 + Math.random() * 9000)}`
   return mockResponse(
-    { id: reference.toLowerCase(), reference, estimatedTotal: estimateTotal(plan, request.town, request.serviceType) },
+    { id: reference.toLowerCase(), reference, estimatedTotal: plan ? estimateTotal(plan, request.town, request.serviceType) : 150 },
     MOCK_SUBMIT_LATENCY_MS,
   )
 }

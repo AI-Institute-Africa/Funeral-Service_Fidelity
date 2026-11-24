@@ -34,7 +34,7 @@ export const defaultThankYou = (person: string) =>
 export const supportResources = [
   { title: 'Grief and counselling', detail: 'Speak to a qualified counsellor, your doctor, a faith leader or a local support group. If you feel unable to cope or at risk of harming yourself, contact emergency services or a crisis line straight away.' },
   { title: 'Check in on each other', detail: 'Grief often feels heaviest weeks after the funeral, when the visitors have gone. Agree on a regular time for the family to call each other.' },
-  { title: 'Memorials and tributes', detail: 'Keep the memorial page up to date, and invite relatives to add memories and photographs.' },
+  { title: 'Memorials & In Loving Memory', detail: 'Keep the memorial page up to date, and invite relatives to add memories and photographs.' },
   { title: 'Estate and paperwork', detail: 'Use the estate checklist to keep track of documents, appointments and contacts.' },
 ]
 

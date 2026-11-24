@@ -8,7 +8,7 @@ import './account-layout.css'
 const promises: { icon: IconName; title: string; text: string }[] = [
   { icon: 'shield', title: 'Your cover, clearly', text: 'See your policy, premiums and beneficiaries in one calm place.' },
   { icon: 'phone', title: 'Help when it matters', text: 'Ask an adviser to call you back, on the channel you prefer.' },
-  { icon: 'heart', title: 'Memories kept safe', text: 'Remembrance pages and tributes are coming to your account.' },
+  { icon: 'heart', title: 'Memories kept safe', text: 'Remembrance and In Loving Memory pages are coming to your account.' },
 ]
 
 /** Split-screen frame for sign-in and sign-up: the form on one side, the brand promise on the other. */

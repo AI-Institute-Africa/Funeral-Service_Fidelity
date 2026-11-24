@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { anchor } from '@/config/routes'
+import { anchor, paths } from '@/config/routes'
 import { HeroArt } from './HeroArt'
 
 export function HeroSection() {
@@ -38,8 +38,8 @@ export function HeroSection() {
             Cover, planning, burial, remembrance and aftercare in one place, for families at home and abroad.
           </p>
           <div className="hero__actions">
-            <Link to={anchor('quote-form')} className="btn btn--primary btn--lg">
-              Get funeral assistance
+            <Link to={paths.funeralSupport} className="btn btn--primary btn--lg">
+              Request assistance
             </Link>
             <Link to={anchor('plans')} className="btn btn--outline btn--lg hero__ghost">
               Explore funeral plans

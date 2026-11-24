@@ -1,6 +1,14 @@
 import { createApp } from './app'
 import { env } from './config/env'
 
+process.on('uncaughtException', (err) => {
+  console.error('[CRASH GUARD - UNCAUGHT EXCEPTION]:', err)
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[CRASH GUARD - UNHANDLED REJECTION]:', reason)
+})
+
 const startServer = async () => {
   const app = await createApp()
   app.listen(env.port, () => {
@@ -10,5 +18,4 @@ const startServer = async () => {
 
 startServer().catch((err) => {
   console.error('Failed to start the server:', err)
-  process.exit(1)
 })

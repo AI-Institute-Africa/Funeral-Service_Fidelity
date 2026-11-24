@@ -2,11 +2,14 @@ import { Icon, type IconName } from '@/components/ui/Icon'
 import { QueryState } from '@/components/ui/QueryState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { formatAge, formatServiceTime } from '@/lib/format'
-import type { AuditEntry } from './data'
 import { useActivity } from './queries'
 import './portal.css'
 
-const icons: Record<AuditEntry['action'], IconName> = { create: 'plus', update: 'check', assign: 'users' }
+const icons: Record<string, IconName> = {
+  create: 'plus',
+  update: 'check',
+  assign: 'users',
+}
 
 export default function ActivityPage() {
   const activity = useActivity()
@@ -28,7 +31,7 @@ export default function ActivityPage() {
               {activity.data.map((entry) => (
                 <li key={entry.id}>
                   <span className="activity__icon">
-                    <Icon name={icons[entry.action]} size={18} />
+                    <Icon name={icons[entry.action] ?? 'check'} size={18} />
                   </span>
                   <span className="activity__body">
                     <strong>{entry.summary}</strong>

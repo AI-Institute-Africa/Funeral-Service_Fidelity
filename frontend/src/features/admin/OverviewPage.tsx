@@ -21,7 +21,7 @@ const pagePath: Record<PortalPage, string> = {
   activity: paths.portalActivity,
 }
 
-const hrefFor = (item: AttentionItem) => `${pagePath[item.target.page]}${item.target.id ? `?focus=${encodeURIComponent(item.target.id)}` : ''}`
+const hrefFor = (item: AttentionItem) => `${pagePath[item.target.page] ?? paths.provider}${item.target.id ? `?focus=${encodeURIComponent(item.target.id)}` : ''}`
 
 export default function OverviewPage() {
   const { user } = useAuth()
@@ -126,12 +126,12 @@ function OverviewBody({ overview, role }: { overview: Overview; role: 'admin' | 
                 subtitle="Current orders by status"
                 data={overview.ordersByStatus
                   .filter((entry) => entry.count > 0)
-                  .map((entry) => ({ label: orderStatusDisplay[entry.status].label, value: entry.count }))}
+                  .map((entry) => ({ label: orderStatusDisplay[entry.status]?.label ?? String(entry.status), value: entry.count }))}
               />
               <ul className="bars">
                 {overview.ordersByStatus.map((entry) => (
                   <li key={entry.status} className="bar">
-                    <span>{orderStatusDisplay[entry.status].label}</span>
+                    <span>{orderStatusDisplay[entry.status]?.label ?? String(entry.status)}</span>
                     <span className="bar__track" aria-hidden="true">
                       <span className="bar__fill" style={{ width: `${(entry.count / max) * 100}%` }} />
                     </span>

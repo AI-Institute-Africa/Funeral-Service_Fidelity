@@ -65,7 +65,7 @@ function EmptyMemorials() {
       <h2 className="panel__title">A place for everyone who loved them</h2>
       <p className="muted" style={{ maxWidth: '46ch' }}>
         Write their life story, share photographs and the service details, and invite family and friends to leave
-        flowers, light candles and share tributes.
+        flowers, light candles and share in loving memory.
       </p>
       <Link className="btn btn--primary" to={paths.accountMemorialNew}>
         Create a memorial
@@ -75,13 +75,18 @@ function EmptyMemorials() {
 }
 
 function MemorialCard({ memorial }: { memorial: OwnedMemorial }) {
+  const flowers = memorial.flowers ?? 0
+  const candles = memorial.candles ?? 0
+  const tributeCount = memorial.tributeCount ?? 0
+  const pendingTributes = memorial.pendingTributes ?? 0
+
   return (
     <article className="card memorial-card-owner">
       <Portrait memorial={memorial} size="md" />
 
       <div className="memorial-card-owner__main">
         <div className="memorial-card-owner__title">
-          <h2>{memorial.name}</h2>
+          <h2>{memorial.name || 'In Loving Memory'}</h2>
           <StatusChip tone={memorial.published ? 'success' : 'neutral'}>
             {memorial.published ? 'Published' : 'Private draft'}
           </StatusChip>
@@ -92,18 +97,18 @@ function MemorialCard({ memorial }: { memorial: OwnedMemorial }) {
         </p>
         <ul className="memorial-card-owner__stats">
           <li>
-            <Icon name="flower" size={16} /> {memorial.flowers.toLocaleString('en-US')}
+            <Icon name="flower" size={16} /> {flowers.toLocaleString('en-US')}
           </li>
           <li>
-            <Icon name="candle" size={16} /> {memorial.candles.toLocaleString('en-US')}
+            <Icon name="candle" size={16} /> {candles.toLocaleString('en-US')}
           </li>
           <li>
-            <Icon name="heart" size={16} /> {memorial.tributeCount}
+            <Icon name="heart" size={16} /> {tributeCount}
           </li>
-          {memorial.pendingTributes > 0 && (
+          {pendingTributes > 0 && (
             <li>
               <Link className="memorial-card-owner__pending" to={accountMemorialPath(memorial.id, 'tributes')}>
-                {memorial.pendingTributes} to review
+                {pendingTributes} in loving memory to review
               </Link>
             </li>
           )}
@@ -111,7 +116,7 @@ function MemorialCard({ memorial }: { memorial: OwnedMemorial }) {
       </div>
 
       <div className="memorial-card-owner__actions">
-        <Link className="btn btn--outline btn--sm" to={memorialPath(memorial.slug)}>
+        <Link className="btn btn--outline btn--sm" to={memorialPath(memorial.slug || memorial.id)}>
           {memorial.published ? 'View' : 'Preview'}
         </Link>
         <Link className="btn btn--dark btn--sm" to={accountMemorialPath(memorial.id)}>

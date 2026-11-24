@@ -8,7 +8,8 @@ type PortraitProps = {
 
 /** The chosen portrait inside a gold ring, or the person's initials when there isn't one yet. */
 export function Portrait({ memorial, size = 'md' }: PortraitProps) {
-  const photo = memorial.photos.find((candidate) => candidate.id === memorial.portraitId)
+  const photos = memorial.photos ?? []
+  const photo = photos.find((candidate) => candidate.id === memorial.portraitId)
 
   return (
     <span className={`portrait portrait--${size}`}>

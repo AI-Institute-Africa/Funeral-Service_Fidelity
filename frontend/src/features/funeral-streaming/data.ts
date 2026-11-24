@@ -13,6 +13,12 @@ export type StreamViewer = {
   consentForAlerts?: boolean
 }
 
+export type StreamChapter = {
+  seconds: number
+  time: string
+  title: string
+}
+
 export type FuneralStream = {
   id: string
   personName: string
@@ -24,6 +30,8 @@ export type FuneralStream = {
   status: StreamStatus
   viewers: StreamViewer[]
   recordingAvailable: boolean
+  videoUrl?: string
+  chapters?: StreamChapter[]
   savedToArchiveId?: string
   updatedAt: string
 }

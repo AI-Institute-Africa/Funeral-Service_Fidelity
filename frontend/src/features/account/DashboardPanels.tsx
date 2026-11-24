@@ -64,3 +64,31 @@ export function NoPolicyCard() {
     </article>
   )
 }
+
+export function ChemaWalletAccountCard({ phone }: { phone?: string }) {
+  const ssoUrl = http://localhost:7600/auth/fidelity-sso?phone=&target=/new
+  return (
+    <article className="card panel" style={{ borderLeft: '4px solid #b91c1c' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
+        <span className="icon-tile" style={{ background: '#fef2f2', color: '#b91c1c' }}>
+          <Icon name="wallet" size={20} />
+        </span>
+        <h2 className="panel__title" style={{ margin: 0, fontSize: '1.05rem' }}>
+          Chema Wallet · Family Fund
+        </h2>
+      </div>
+      <p className="muted" style={{ fontSize: '0.875rem', lineHeight: 1.5, marginBottom: '1rem' }}>
+        Single sign-on active. Collect contributions from relatives and friends worldwide. Funds settle directly into verified digital rails.
+      </p>
+      <a
+        href={ssoUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="btn btn--primary btn--sm"
+        style={{ width: '100%', justifyContent: 'center' }}
+      >
+        <Icon name="wallet" size={16} /> Open Chema Wallet (Auto-SSO) ?
+      </a>
+    </article>
+  )
+}

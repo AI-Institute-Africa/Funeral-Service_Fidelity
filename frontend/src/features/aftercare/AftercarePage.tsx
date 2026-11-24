@@ -154,7 +154,7 @@ export default function AftercarePage() {
             ))}
           </ul>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Link className="btn btn--outline btn--sm" to={paths.accountMemorials}>Memorials and tributes</Link>
+            <Link className="btn btn--outline btn--sm" to={paths.accountMemorials}>Memorials & In Loving Memory</Link>
             <Link className="btn btn--outline btn--sm" to={paths.accountEstate}>Estate checklist</Link>
           </div>
         </section>

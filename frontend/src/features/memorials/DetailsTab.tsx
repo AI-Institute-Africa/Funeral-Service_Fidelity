@@ -15,15 +15,15 @@ const today = () => new Date().toISOString().slice(0, 10)
 export function DetailsTab({ memorial }: { memorial: OwnedMemorial }) {
   const update = useUpdateMemorial(memorial.id)
   const [form, setForm] = useState({
-    name: memorial.name,
-    born: memorial.born,
-    died: memorial.died,
+    name: memorial.name ?? '',
+    born: memorial.born ?? '',
+    died: memorial.died ?? '',
     tagline: memorial.tagline ?? '',
     location: memorial.location ?? '',
   })
   const [hasService, setHasService] = useState(Boolean(memorial.service))
   const [service, setService] = useState({
-    date: memorial.service ? toHarareInput(memorial.service.date) : '',
+    date: memorial.service?.date ? toHarareInput(memorial.service.date) : '',
     venue: memorial.service?.venue ?? '',
     address: memorial.service?.address ?? '',
     note: memorial.service?.note ?? '',
