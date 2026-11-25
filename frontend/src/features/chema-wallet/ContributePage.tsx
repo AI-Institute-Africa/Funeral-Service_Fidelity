@@ -308,14 +308,14 @@ export default function ContributePage() {
                   <p className="cw-eyebrow">Community support</p>
                   <h2 id="cw-contributors-title">Who contributed</h2>
                 </div>
-                <StatusChip tone="success">{contributions.filter((c) => c.status === 'confirmed').length} confirmed</StatusChip>
+                <StatusChip tone="success">{contributions.filter((c) => c.status === 'successful').length} confirmed</StatusChip>
               </div>
-              {contributions.filter((c) => c.status === 'confirmed').length === 0 ? (
+              {contributions.filter((c) => c.status === 'successful').length === 0 ? (
                 <p className="cw-public__empty">No confirmed contributions yet. Be the first to support the family.</p>
               ) : (
                 <div className="cw-tributes">
                   {contributions
-                    .filter((c) => c.status === 'confirmed')
+                    .filter((c) => c.status === 'successful')
                     .map((c) => {
                       const contributorLabel = c.anonymous ? 'Anonymous supporter' : c.contributorName || 'Community supporter'
                       return (
