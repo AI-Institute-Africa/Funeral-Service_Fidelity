@@ -3,6 +3,7 @@ import { MarketplaceSection } from '@/features/marketplace/MarketplaceSection'
 import { PlansSection } from '@/features/plans/PlansSection'
 import { ProviderTeaserSection } from '@/features/provider/ProviderTeaserSection'
 import { DiasporaSection } from './sections/DiasporaSection'
+import { DigitalServicesSection } from './sections/DigitalServicesSection'
 import { EmergencyStrip } from './sections/EmergencyStrip'
 import { HeroSection } from './sections/HeroSection'
 import { LegacyStudioSection } from './sections/LegacyStudioSection'
@@ -24,6 +25,7 @@ export function HomePage() {
       <Reveal><PlansSection /></Reveal>
       <Reveal><DiasporaSection /></Reveal>
       <Reveal><MemorialsSection /></Reveal>
+      <Reveal><DigitalServicesSection /></Reveal>
       <Reveal><LegacyStudioSection /></Reveal>
       <Reveal><MarketplaceSection /></Reveal>
       <Reveal><ProviderTeaserSection /></Reveal>

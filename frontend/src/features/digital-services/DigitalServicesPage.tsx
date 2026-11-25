@@ -72,6 +72,45 @@ function readStored<T>(key: string, fallback: T[]): T[] {
   return fallback
 }
 
+function CreateGateNotice({ inviteCodeInput, setInviteCodeInput, inviteError, onUnlock }: {
+  inviteCodeInput: string
+  setInviteCodeInput: (v: string) => void
+  inviteError: string
+  onUnlock: (e: FormEvent) => void
+}) {
+  return (
+    <div className="stack" style={{ gap: '0.75rem', padding: '1rem', borderRadius: '10px', background: '#f8fafc', border: '1px solid #cbd5e1' }}>
+      <p style={{ margin: 0, fontWeight: 600 }}>
+        Create an account or enter an invitation code to create new digital memories
+      </p>
+      <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
+        You can explore and play everything on this page freely. To generate AI music, create videos, or host a livestream, please create an account or use an invitation from the account holder.
+      </p>
+      <div className="cluster">
+        <Link className="btn btn--primary btn--sm" to={`${paths.signup}?next=${encodeURIComponent(paths.digitalServices)}`}>
+          Create account
+        </Link>
+        <Link className="btn btn--outline btn--sm" to={`${paths.login}?next=${encodeURIComponent(paths.digitalServices)}`}>
+          Sign in
+        </Link>
+      </div>
+      <form onSubmit={onUnlock} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          className="input"
+          style={{ maxWidth: '220px' }}
+          placeholder="Invitation code (e.g. FLA-INVITE)"
+          value={inviteCodeInput}
+          onChange={(e) => setInviteCodeInput(e.target.value)}
+        />
+        <button type="submit" className="btn btn--dark btn--sm">
+          Unlock with invitation
+        </button>
+      </form>
+      {inviteError && <Callout tone="danger">{inviteError}</Callout>}
+    </div>
+  )
+}
+
 export default function DigitalServicesPage() {
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -101,7 +140,7 @@ export default function DigitalServicesPage() {
   const [videoTheme, setVideoTheme] = useState('Golden Memories Reel')
   const [videoNotice, setVideoNotice] = useState('')
 
-  const hasAccess = Boolean(user) || unlockedByInvite
+  const canCreate = Boolean(user) || unlockedByInvite
   const myInviteToken = user ? `FLA-${user.id.slice(0, 6).toUpperCase()}` : inviteParam || 'FLA-INVITE'
   const shareUrl = `${window.location.origin}${paths.digitalServices}?invite=${encodeURIComponent(myInviteToken)}&host=${encodeURIComponent(user?.name ?? hostParam ?? 'Family Host')}`
 
@@ -175,7 +214,7 @@ export default function DigitalServicesPage() {
 
   function handleCreateMusic(e: FormEvent) {
     e.preventDefault()
-    if (!musicTitle.trim() || !musicHonouree.trim()) return
+    if (!canCreate || !musicTitle.trim() || !musicHonouree.trim()) return
     const nextTrack: MusicTrack = {
       id: `trk-${Date.now().toString(36)}`,
       title: musicTitle.trim(),
@@ -200,7 +239,7 @@ export default function DigitalServicesPage() {
 
   function handleCreateVideo(e: FormEvent) {
     e.preventDefault()
-    if (!videoTitle.trim() || !videoHonouree.trim()) return
+    if (!canCreate || !videoTitle.trim() || !videoHonouree.trim()) return
     const nextVideo: VideoTribute = {
       id: `vid-${Date.now().toString(36)}`,
       title: videoTitle.trim(),
@@ -227,56 +266,16 @@ export default function DigitalServicesPage() {
         <SectionHead
           as="h1"
           eyebrow="Fidelity Digital Services"
-          title="Create & share digital memories: AI music, videos, livestreaming & flowers."
+          title="Explore & create digital memories: AI music, videos, livestreaming & flowers."
         />
 
-        {!hasAccess ? (
-          <div className="grid grid--2" style={{ gap: '1.5rem', marginTop: '1rem' }}>
-            <article className="card stack">
-              <p className="eyebrow">Account access</p>
-              <h2>Create an account or sign in</h2>
-              <p className="muted">
-                Digital Services are accessed through an account or an invitation from the account holder. Create your account to host and share digital memories.
-              </p>
-              <div className="cluster">
-                <Link className="btn btn--primary" to={`${paths.signup}?next=${encodeURIComponent(paths.digitalServices)}`}>
-                  Create account
-                </Link>
-                <Link className="btn btn--outline" to={`${paths.login}?next=${encodeURIComponent(paths.digitalServices)}`}>
-                  Sign in
-                </Link>
-              </div>
-            </article>
-
-            <form className="card stack" onSubmit={handleUnlockInvite}>
-              <p className="eyebrow">Invited relative or friend</p>
-              <h2>Access via invitation</h2>
-              <p className="muted">
-                If an account holder invited you, enter their invitation code below or open the link they shared with you.
-              </p>
-              <label className="field">
-                <span className="field__label">Invitation code</span>
-                <input
-                  className="input"
-                  placeholder="e.g. FLA-INVITE"
-                  value={inviteCodeInput}
-                  onChange={(e) => setInviteCodeInput(e.target.value)}
-                  required
-                />
-              </label>
-              {inviteError && <Callout tone="danger">{inviteError}</Callout>}
-              <button type="submit" className="btn btn--dark">
-                Open Digital Services
-              </button>
-            </form>
-          </div>
-        ) : (
+        {canCreate ? (
           <div className="stack" style={{ gap: '1.25rem' }}>
             <Callout tone="success">
-              <strong>Workspace unlocked</strong>{' '}
+              <strong>Creation unlocked</strong>{' '}
               {user
-                ? `Signed in as ${user.name}. Invite family & friends using the share link below so they can create digital memories here too.`
-                : `Accessed via invitation (${inviteParam}${hostParam ? ` · Hosted by ${hostParam}` : ''}). You can create AI music, videos, livestreaming links, and flowers.`}
+                ? `Signed in as ${user.name}. You can create AI music, videos, livestreaming links, and invite family & friends using the share link below.`
+                : `Unlocked via invitation (${inviteParam}${hostParam ? ` · Hosted by ${hostParam}` : ''}). You can explore and create digital memories below.`}
             </Callout>
 
             <div className="card stack">
@@ -288,59 +287,63 @@ export default function DigitalServicesPage() {
               />
             </div>
           </div>
+        ) : (
+          <Callout tone="info">
+            <strong>Explore freely:</strong> Listen to existing AI memorial music, preview tribute videos, and explore livestreaming and grave-map flowers below. Creating new digital memories requires creating an account or using an invitation from an account holder.
+          </Callout>
         )}
       </Section>
 
-      {hasAccess && (
-        <>
-          {/* 1. AI Memorial Music (Create & Play Existing) */}
-          <Section soft>
-            <div className="grid grid--2" style={{ gap: '1.5rem', alignItems: 'start' }}>
-              <div className="card stack">
-                <p className="eyebrow">🎵 AI Memorial Music</p>
-                <h2 style={{ margin: 0 }}>Play existing memorial music</h2>
-                <p className="muted">Listen to existing tribute songs or newly generated AI compositions.</p>
-                <div className="stack" style={{ gap: '0.75rem' }}>
-                  {tracks.map((trk) => {
-                    const isPlaying = playingTrackId === trk.id
-                    return (
-                      <div
-                        key={trk.id}
-                        style={{
-                          padding: '0.85rem',
-                          borderRadius: '8px',
-                          border: '1px solid #e2e8f0',
-                          background: isPlaying ? '#fdf2f8' : '#ffffff',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: '0.75rem',
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        <div>
-                          <strong>{trk.title}</strong>
-                          <div className="muted" style={{ fontSize: '0.84rem' }}>
-                            In memory of {trk.honouree} · {trk.style} · {trk.duration}
-                          </div>
-                          <div style={{ fontSize: '0.78rem', color: '#64748b' }}>By {trk.createdBy}</div>
-                        </div>
-                        <button
-                          type="button"
-                          className={`btn btn--sm ${isPlaying ? 'btn--dark' : 'btn--primary'}`}
-                          onClick={() => togglePlayTrack(trk)}
-                        >
-                          {isPlaying ? '⏸ Pause' : '▶ Play'}
-                        </button>
+      {/* 1. AI Memorial Music (Always explorable; creation requires account or invite) */}
+      <Section soft id="create-music">
+        <div className="grid grid--2" style={{ gap: '1.5rem', alignItems: 'start' }}>
+          <div className="card stack">
+            <p className="eyebrow">🎵 AI Memorial Music</p>
+            <h2 style={{ margin: 0 }}>Explore &amp; play existing memorial music</h2>
+            <p className="muted">Listen to existing tribute songs and AI-composed memorials.</p>
+            <div className="stack" style={{ gap: '0.75rem' }}>
+              {tracks.map((trk) => {
+                const isPlaying = playingTrackId === trk.id
+                return (
+                  <div
+                    key={trk.id}
+                    style={{
+                      padding: '0.85rem',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      background: isPlaying ? '#fdf2f8' : '#ffffff',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <div>
+                      <strong>{trk.title}</strong>
+                      <div className="muted" style={{ fontSize: '0.84rem' }}>
+                        In memory of {trk.honouree} · {trk.style} · {trk.duration}
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>By {trk.createdBy}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className={`btn btn--sm ${isPlaying ? 'btn--dark' : 'btn--primary'}`}
+                      onClick={() => togglePlayTrack(trk)}
+                    >
+                      {isPlaying ? '⏸ Pause' : '▶ Play'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
 
-              <form className="card stack" onSubmit={handleCreateMusic}>
-                <p className="eyebrow">Create new</p>
-                <h2 style={{ margin: 0 }}>Generate AI memorial music</h2>
+          <div className="card stack">
+            <p className="eyebrow">Create new</p>
+            <h2 style={{ margin: 0 }}>Generate AI memorial music</h2>
+            {canCreate ? (
+              <form className="stack" onSubmit={handleCreateMusic}>
                 <label className="field">
                   <span className="field__label">Song title</span>
                   <input className="input" value={musicTitle} onChange={(e) => setMusicTitle(e.target.value)} placeholder="e.g. Forever in Our Hearts" required />
@@ -367,36 +370,47 @@ export default function DigitalServicesPage() {
                   ✨ Generate AI Memorial Music
                 </button>
               </form>
-            </div>
-          </Section>
+            ) : (
+              <CreateGateNotice
+                inviteCodeInput={inviteCodeInput}
+                setInviteCodeInput={setInviteCodeInput}
+                inviteError={inviteError}
+                onUnlock={handleUnlockInvite}
+              />
+            )}
+          </div>
+        </div>
+      </Section>
 
-          {/* 2. Memorial Videos */}
-          <Section>
-            <div className="grid grid--2" style={{ gap: '1.5rem', alignItems: 'start' }}>
-              <div className="card stack">
-                <p className="eyebrow">🎬 Memorial Videos</p>
-                <h2 style={{ margin: 0 }}>Existing tribute videos</h2>
-                <div className="stack" style={{ gap: '0.75rem' }}>
-                  {videos.map((vid) => (
-                    <div key={vid.id} style={{ padding: '0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                        <strong>{vid.title}</strong>
-                        <StatusChip tone="success">Ready</StatusChip>
-                      </div>
-                      <div className="muted" style={{ fontSize: '0.84rem', marginTop: '0.25rem' }}>
-                        Honouree: {vid.honouree} · {vid.theme}
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.2rem' }}>
-                        Created by {vid.createdBy}
-                      </div>
-                    </div>
-                  ))}
+      {/* 2. Memorial Videos (Always explorable; creation requires account or invite) */}
+      <Section id="create-video">
+        <div className="grid grid--2" style={{ gap: '1.5rem', alignItems: 'start' }}>
+          <div className="card stack">
+            <p className="eyebrow">🎬 Memorial Videos</p>
+            <h2 style={{ margin: 0 }}>Explore existing tribute videos</h2>
+            <div className="stack" style={{ gap: '0.75rem' }}>
+              {videos.map((vid) => (
+                <div key={vid.id} style={{ padding: '0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                    <strong>{vid.title}</strong>
+                    <StatusChip tone="success">Ready</StatusChip>
+                  </div>
+                  <div className="muted" style={{ fontSize: '0.84rem', marginTop: '0.25rem' }}>
+                    Honouree: {vid.honouree} · {vid.theme}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.2rem' }}>
+                    Created by {vid.createdBy}
+                  </div>
                 </div>
-              </div>
+              ))}
+            </div>
+          </div>
 
-              <form className="card stack" onSubmit={handleCreateVideo}>
-                <p className="eyebrow">Create new</p>
-                <h2 style={{ margin: 0 }}>Create a memorial video</h2>
+          <div className="card stack">
+            <p className="eyebrow">Create new</p>
+            <h2 style={{ margin: 0 }}>Create a memorial video</h2>
+            {canCreate ? (
+              <form className="stack" onSubmit={handleCreateVideo}>
                 <label className="field">
                   <span className="field__label">Video title</span>
                   <input className="input" value={videoTitle} onChange={(e) => setVideoTitle(e.target.value)} placeholder="e.g. Remembering Baba Moyo" required />
@@ -418,44 +432,51 @@ export default function DigitalServicesPage() {
                   🎬 Create Memorial Video
                 </button>
               </form>
-            </div>
-          </Section>
+            ) : (
+              <CreateGateNotice
+                inviteCodeInput={inviteCodeInput}
+                setInviteCodeInput={setInviteCodeInput}
+                inviteError={inviteError}
+                onUnlock={handleUnlockInvite}
+              />
+            )}
+          </div>
+        </div>
+      </Section>
 
-          {/* 3. Livestreaming & 4. Flowers / Candles on Grave Map */}
-          <Section soft>
-            <div className="grid grid--2" style={{ gap: '1.5rem' }}>
-              <article className="card stack">
-                <p className="eyebrow">📡 Funeral Livestreaming</p>
-                <h2 style={{ margin: 0 }}>Broadcast &amp; watch live coverage</h2>
-                <p className="muted">
-                  Allow relatives at home and in the diaspora to join the funeral service live, share condolences, and replay recorded coverage.
-                </p>
-                <div className="cluster">
-                  <Link className="btn btn--primary" to={user ? paths.accountFuneralStreaming : `${paths.login}?next=${encodeURIComponent(paths.accountFuneralStreaming)}`}>
-                    Open Live Funeral Coverage
-                  </Link>
-                </div>
-              </article>
-
-              <article className="card stack">
-                <p className="eyebrow">🌸🕯️ Flowers &amp; Candles</p>
-                <h2 style={{ margin: 0 }}>Place flowers &amp; candles on the grave</h2>
-                <p className="muted">
-                  Drag and drop virtual flowers and vigil candles directly onto the grave on Google Maps with your name recorded, or visit a digital memorial.
-                </p>
-                <div className="cluster">
-                  <Link className="btn btn--primary" to={`${paths.cemeteries}?grave=Grace+Nyathi`}>
-                    Place Flower / Candle on Grave Map
-                  </Link>
-                  <Link className="btn btn--outline" to={memorialPath('grace-nyathi')}>
-                    Visit Digital Memorial
-                  </Link>
-                </div>
-              </article>
+      {/* 3. Livestreaming & 4. Flowers / Candles on Grave Map */}
+      <Section soft>
+        <div className="grid grid--2" style={{ gap: '1.5rem' }}>
+          <article className="card stack">
+            <p className="eyebrow">📡 Funeral Livestreaming</p>
+            <h2 style={{ margin: 0 }}>Broadcast &amp; watch live coverage</h2>
+            <p className="muted">
+              Allow relatives at home and in the diaspora to join the funeral service live, share condolences, and replay recorded coverage.
+            </p>
+            <div className="cluster">
+              <Link className="btn btn--primary" to={user ? paths.accountFuneralStreaming : `${paths.signup}?next=${encodeURIComponent(paths.accountFuneralStreaming)}`}>
+                {user ? 'Open Live Funeral Coverage' : 'Create account to host Livestream'}
+              </Link>
             </div>
-          </Section>
-        </>
-      )}
+          </article>
+
+          <article className="card stack">
+            <p className="eyebrow">🌸🕯️ Digital Flowers &amp; Candles</p>
+            <h2 style={{ margin: 0 }}>Place flowers &amp; candles on the grave</h2>
+            <p className="muted">
+              Drag and drop virtual flowers and vigil candles directly onto the grave on Google Maps with your name recorded, or visit a digital memorial.
+            </p>
+            <div className="cluster">
+              <Link className="btn btn--primary" to={`${paths.cemeteries}?grave=Grace+Nyathi`}>
+                Place Flower / Candle on Grave Map
+              </Link>
+              <Link className="btn btn--outline" to={memorialPath('grace-nyathi')}>
+                Visit Digital Memorial
+              </Link>
+            </div>
+          </article>
+        </div>
+      </Section>
     </>
   )
 }
