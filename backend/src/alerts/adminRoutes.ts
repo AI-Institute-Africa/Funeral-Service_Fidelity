@@ -74,7 +74,7 @@ export function createAdminRouter(): Router {
 
   router.put('/sms', async (req, res, next) => {
     try {
-      const parsed = z.object({ provider: z.enum(['africastalking', 'twilio', 'log']).optional(), senderId: z.string().trim().max(32).optional() }).safeParse(req.body)
+      const parsed = z.object({ provider: z.enum(['smspop', 'africastalking', 'twilio', 'log']).optional(), senderId: z.string().trim().max(32).optional() }).safeParse(req.body)
       if (!parsed.success) { res.status(400).json({ success: false, message: 'Invalid request', issues: parsed.error.issues }); return }
       res.json({ success: true, settings: await saveSmsSettings(parsed.data, ACTOR) })
     } catch (err) { next(err) }
@@ -82,7 +82,7 @@ export function createAdminRouter(): Router {
 
   router.post('/sms/test', async (req, res, next) => {
     try {
-      const body = z.object({ provider: z.enum(['africastalking', 'twilio']) }).safeParse(req.body)
+      const body = z.object({ provider: z.enum(['smspop', 'africastalking', 'twilio']) }).safeParse(req.body)
       if (!body.success) { res.status(400).json({ success: false, message: 'Choose a provider to test' }); return }
       res.json({ success: true, ...(await testSmsConnection(body.data.provider)) })
     } catch (err) { next(err) }

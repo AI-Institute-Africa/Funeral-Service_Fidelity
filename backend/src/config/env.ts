@@ -30,6 +30,13 @@ export const env = {
     mode: (process.env.ALERTS_MODE === 'live' ? 'live' : 'log') as 'live' | 'log',
     /** Interim shared secret for the dispatch/outbox endpoints until user authentication exists. */
     apiToken: process.env.ALERTS_API_TOKEN || '',
+    smsProvider: (process.env.SMS_PROVIDER || '').toLowerCase(),
+    smspop: {
+      baseUrl: (process.env.SMSPOP_BASE_URL || 'https://smspop.co.zw/api').replace(/\/+$/, ''),
+      senderId: process.env.SMSPOP_SENDER_ID || '',
+      campaignName: process.env.SMSPOP_CAMPAIGN_NAME || '',
+      apiKey: process.env.SMSPOP_API_KEY || process.env.SMS_API_KEY || '',
+    },
     africasTalking: {
       apiKey: process.env.AFRICASTALKING_API_KEY || '',
       username: process.env.AFRICASTALKING_USERNAME || '',

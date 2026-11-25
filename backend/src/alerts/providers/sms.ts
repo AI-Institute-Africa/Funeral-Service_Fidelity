@@ -14,6 +14,57 @@ export class LogSmsProvider implements SmsProvider {
   }
 }
 
+export interface SmsPopConfig {
+  baseUrl: string
+  apiKey: string
+  senderId: string
+  campaignName?: string
+}
+
+export class SmsPopSmsProvider implements SmsProvider {
+  readonly name = 'smspop'
+  constructor(private readonly cfg: SmsPopConfig, private readonly fetchFn: Fetch = fetch) {}
+
+  async send(to: string, body: string): Promise<SendResult> {
+    const endpoint = `${this.cfg.baseUrl.replace(/\/+$/, '')}/campaigns`
+    try {
+      const res = await this.fetchFn(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.cfg.apiKey}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender_id: this.cfg.senderId,
+          ...(this.cfg.campaignName ? { name: this.cfg.campaignName } : {}),
+          message: body,
+          manual_contacts: [to],
+        }),
+      })
+      const json = (await res.json().catch(() => ({}))) as {
+        id?: string | number
+        message_id?: string
+        message?: string
+        error?: string
+        data?: { id?: string | number; message_id?: string }
+      }
+      if (res.ok) {
+        const messageId = String(json.message_id ?? json.data?.message_id ?? json.id ?? json.data?.id ?? `smspop-${Date.now().toString(36)}`)
+        return { ok: true, provider: this.name, messageId }
+      }
+      return {
+        ok: false,
+        provider: this.name,
+        error: json.error ?? json.message ?? `HTTP ${res.status}`,
+        retryable: isRetryableStatus(res.status),
+      }
+    } catch (err) {
+      return { ok: false, provider: this.name, error: (err as Error).message, retryable: true }
+    }
+  }
+}
+
 export interface AfricasTalkingConfig { apiKey: string; username: string; from?: string }
 
 export class AfricasTalkingSmsProvider implements SmsProvider {
@@ -67,32 +118,37 @@ export class TwilioSmsProvider implements SmsProvider {
   }
 }
 
-export type SmsProviderName = 'africastalking' | 'twilio' | 'log'
+export type SmsProviderName = 'smspop' | 'africastalking' | 'twilio' | 'log'
 
 export interface SmsSelection {
-  /** From the admin setting. When unset the provider is chosen from whichever credentials exist. */
+  /** From the admin setting. When unset the provider is chosen from SMS_PROVIDER or whichever credentials exist. */
   provider?: SmsProviderName
   /** From the admin setting; overrides the env sender for the chosen provider. */
   senderId?: string
 }
 
 /**
- * Chooses the SMS provider: the admin's setting if there is one, otherwise Africa's Talking, then Twilio,
- * then the log fallback. API keys always come from the environment. `ALERTS_MODE=log` forces the log provider.
- * A provider that is chosen but has no credentials is an error, never a silent fall back to logging.
+ * Chooses the SMS provider: the admin's setting if there is one, otherwise SMS_PROVIDER, otherwise
+ * SMSPoP, Africa's Talking, Twilio, or the log fallback. API keys always come from the environment.
+ * `ALERTS_MODE=log` forces the log provider.
  */
 export function createSmsProvider(fetchFn: Fetch = fetch, selection: SmsSelection = {}): SmsProvider {
-  const { africasTalking: at, twilio, publicBaseUrl } = env.alerts
+  const { smspop, africasTalking: at, twilio, publicBaseUrl, smsProvider } = env.alerts
   if (env.alerts.mode === 'log' || selection.provider === 'log') return new LogSmsProvider()
 
+  const hasSmsPop = Boolean(smspop.apiKey && (selection.senderId || smspop.senderId))
   const hasAt = Boolean(at.apiKey && at.username)
   const hasTwilio = Boolean(twilio.accountSid && twilio.authToken && (twilio.from || selection.senderId))
-  const choice = selection.provider ?? (hasAt ? 'africastalking' : hasTwilio ? 'twilio' : undefined)
+  const envChoice = (smsProvider || undefined) as SmsProviderName | undefined
+  const choice = selection.provider ?? envChoice ?? (hasSmsPop ? 'smspop' : hasAt ? 'africastalking' : hasTwilio ? 'twilio' : undefined)
 
+  if (choice === 'smspop' && hasSmsPop) {
+    return new SmsPopSmsProvider({ ...smspop, senderId: selection.senderId || smspop.senderId }, fetchFn)
+  }
   if (choice === 'africastalking' && hasAt) return new AfricasTalkingSmsProvider({ ...at, from: selection.senderId || at.from }, fetchFn)
   if (choice === 'twilio' && hasTwilio) {
     const statusCallback = publicBaseUrl ? `${publicBaseUrl}/api/alerts/webhooks/twilio` : undefined
     return new TwilioSmsProvider({ ...twilio, from: selection.senderId || twilio.from, statusCallback }, fetchFn)
   }
-  throw new Error(`ALERTS_MODE=live but ${choice ?? 'no SMS provider'} is not configured (set AFRICASTALKING_* or TWILIO_*).`)
+  throw new Error(`ALERTS_MODE=live but ${choice ?? 'no SMS provider'} is not configured (set SMSPOP_*, AFRICASTALKING_*, or TWILIO_*).`)
 }

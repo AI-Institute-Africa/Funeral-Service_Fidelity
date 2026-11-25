@@ -9,7 +9,7 @@ import type { Fetch, SmsSelection } from './providers/sms'
 const KEY = 'alerts.sms'
 
 const settingSchema = z.object({
-  provider: z.enum(['africastalking', 'twilio', 'log']).optional(),
+  provider: z.enum(['smspop', 'africastalking', 'twilio', 'log']).optional(),
   senderId: z.string().trim().max(32).optional(),
 })
 
@@ -43,17 +43,28 @@ export async function saveSmsSettings(input: unknown, updatedBy: string): Promis
 
 /** Which credentials exist in the environment, without revealing them. */
 export function credentialStatus() {
-  const { africasTalking: at, twilio } = env.alerts
+  const { smspop, africasTalking: at, twilio, smsProvider } = env.alerts
   return {
     mode: env.alerts.mode,
+    configuredProvider: smsProvider || undefined,
+    smspop: Boolean(smspop.apiKey && smspop.senderId),
     africastalking: Boolean(at.apiKey && at.username),
     twilio: Boolean(twilio.accountSid && twilio.authToken && twilio.from),
   }
 }
 
 /** A live, read-only call to the provider's account endpoint to prove the credentials work. Sends no message. */
-export async function testSmsConnection(provider: 'africastalking' | 'twilio', fetchFn: Fetch = fetch): Promise<{ ok: boolean; message: string }> {
+export async function testSmsConnection(provider: 'smspop' | 'africastalking' | 'twilio', fetchFn: Fetch = fetch): Promise<{ ok: boolean; message: string }> {
   try {
+    if (provider === 'smspop') {
+      const { baseUrl, apiKey, senderId } = env.alerts.smspop
+      if (!apiKey || !senderId) return { ok: false, message: 'SMSPOP_API_KEY and SMSPOP_SENDER_ID are not set.' }
+      const res = await fetchFn(`${baseUrl}/campaigns`, {
+        headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(8000),
+      })
+      return res.ok ? { ok: true, message: 'Connected to SMSPoP.' } : { ok: false, message: `SMSPoP replied HTTP ${res.status}.` }
+    }
     if (provider === 'africastalking') {
       const { apiKey, username } = env.alerts.africasTalking
       if (!apiKey || !username) return { ok: false, message: 'AFRICASTALKING_API_KEY and AFRICASTALKING_USERNAME are not set.' }
