@@ -138,11 +138,11 @@ export function createAuthRouter(): Router {
         // Database offline fallback
       }
 
-      // Send OTP directly to user's phone via WhatsApp Gateway
-      const waResult = await sendWhatsAppOtp(phone, code)
-
-      // Fallback/secondary delivery to SMS provider
-      const smsSent = await createSmsProvider().send(phone, `Your Fidelity Life sign-in code is ${code}. It expires in 5 minutes. Do not share it with anyone.`)
+      // Send OTP via WhatsApp Gateway and SMS provider in parallel to minimize latency
+      const [waResult, smsSent] = await Promise.all([
+        sendWhatsAppOtp(phone, code),
+        createSmsProvider().send(phone, `Your Fidelity Life sign-in code is ${code}. It expires in 5 minutes. Do not share it with anyone.`),
+      ])
 
       if (!waResult.ok && !smsSent.ok) {
         inMemoryOtpChallenges.delete(phone)

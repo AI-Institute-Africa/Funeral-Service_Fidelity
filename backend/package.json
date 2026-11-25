@@ -4,9 +4,9 @@
   "description": "Fidelity Life Assurance Platform API (Express + Prisma)",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts --exec \"tsx src/server.ts\"",
+    "dev": "nodemon --watch src --ext ts --exec \"tsx --use-system-ca src/server.ts\"",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node --use-system-ca dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "sync:alerts": "node scripts/sync-alert-templates.mjs",
