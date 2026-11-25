@@ -51,12 +51,15 @@ export class SmsPopSmsProvider implements SmsProvider {
       }
       if (res.ok) {
         const messageId = String(json.message_id ?? json.data?.message_id ?? json.id ?? json.data?.id ?? `smspop-${Date.now().toString(36)}`)
+        console.log(`[alerts:smspop] Sent SMS to ${to} (messageId=${messageId})`)
         return { ok: true, provider: this.name, messageId }
       }
+      const errMsg = json.error ?? json.message ?? `HTTP ${res.status}`
+      console.error(`[alerts:smspop] Failed to send SMS to ${to}: ${errMsg}`)
       return {
         ok: false,
         provider: this.name,
-        error: json.error ?? json.message ?? `HTTP ${res.status}`,
+        error: errMsg,
         retryable: isRetryableStatus(res.status),
       }
     } catch (err) {

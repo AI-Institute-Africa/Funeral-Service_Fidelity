@@ -152,7 +152,7 @@ export function createAuthRouter(): Router {
         return
       }
 
-      console.log(`[auth:otp] Generated OTP for ${phone}: ${code} (WhatsApp: ${waResult.ok ? (waResult.queued ? 'queued' : 'sent') : 'failed'})`)
+      console.log(`[auth:otp] Generated OTP for ${phone}: ${code} (WhatsApp: ${waResult.ok ? (waResult.queued ? 'queued' : 'sent') : 'failed'}, SMS [${smsSent.provider}]: ${smsSent.ok ? 'sent' : `failed: ${smsSent.error}`})`)
 
       res.json({
         expiresInSeconds: OTP_TTL_MS / 1000,
