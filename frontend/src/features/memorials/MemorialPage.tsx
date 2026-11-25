@@ -93,7 +93,7 @@ function MemorialView({ memorial }: { memorial: Memorial }) {
           const chemaCase = chemaStore.getCaseByMemorial(memorial.slug)
           if (!chemaCase?.activated) return null
           return (
-            <section className="card stack" aria-labelledby="send-chema-title" style={{ marginBottom: '1rem' }}>
+            <section className="card stack memorial-chema-card" aria-labelledby="send-chema-title">
               <p className="eyebrow">Chema Wallet</p>
               <h2 id="send-chema-title" className="panel__title" style={{ marginBottom: '.25rem' }}>Support the family</h2>
               <p className="muted">You can send a community contribution for this funeral through Chema Wallet. Payments on this page are simulated for demonstration only and are separate from Fidelity policy benefits and claims.</p>

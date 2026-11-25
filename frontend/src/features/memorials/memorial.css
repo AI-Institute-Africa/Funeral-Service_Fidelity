@@ -82,6 +82,15 @@
 
   /* ---- Offerings ---- */
 
+  .memorial-chema-card {
+    position: relative;
+    z-index: 2;
+    margin-top: -76px;
+    margin-bottom: var(--space-5);
+    box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-lg);
+  }
+
   .offerings {
     position: relative;
     z-index: 2;
@@ -92,6 +101,8 @@
     border-radius: var(--radius-lg);
     animation: rise var(--duration-slow) var(--ease-out) 120ms both;
   }
+
+  .memorial-chema-card + .offerings { margin-top: 0; }
 
   .offerings__buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 
@@ -335,7 +346,9 @@
   }
 
   @media (max-width: 640px) {
+    .memorial-chema-card { margin-top: -56px; }
     .offerings { margin-top: -56px; }
+    .memorial-chema-card + .offerings { margin-top: 0; }
     .offerings__buttons { grid-template-columns: minmax(0, 1fr); }
     .timeline::before { left: 24px; }
     .timeline__entry { grid-template-columns: 24px minmax(0, 1fr); column-gap: var(--space-3); }

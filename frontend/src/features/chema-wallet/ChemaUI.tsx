@@ -111,7 +111,10 @@ export function ShareLinkBox({ url, compact = false }: { url: string; compact?: 
       </div>
       <div className="cw-share__actions">
         <a className="btn btn--primary btn--sm" href={`https://wa.me/?text=${encoded}`} target="_blank" rel="noopener noreferrer">
-          <Icon name="chat" size={16} /> Share on WhatsApp
+          <Icon name="chat" size={16} /> Share via WhatsApp
+        </a>
+        <a className="btn btn--outline btn--sm" href={`mailto:?subject=${encodeURIComponent('Support the family — Chema Wallet Contribution Link')}&body=${encodeURIComponent(`Hello,\n\nYou can send a bereavement contribution (Chema) to support the family through this verified Chema Wallet page:\n\n${url}\n\nThank you for your kindness and support.`)}`}>
+          ✉️ Share via Email
         </a>
         <a className="btn btn--outline btn--sm" href={url} target="_blank" rel="noopener noreferrer">
           Open public page <Icon name="arrow-right" size={16} />
