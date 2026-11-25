@@ -48,3 +48,6 @@ Thumbs.db
 dist-whatsapp/
 .whatsapp-session/
 backend/.whatsapp-session/
+
+.data/
+backend/.data/

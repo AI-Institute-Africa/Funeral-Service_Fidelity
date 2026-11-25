@@ -4,6 +4,12 @@ import { z } from 'zod'
 import { env } from '../config/env'
 import { createSmsProvider } from '../alerts/providers/sms'
 import { sendWhatsAppOtp, notifyDual } from '../services/whatsappGateway'
+import {
+  createFallbackUser,
+  findFallbackUserById,
+  findFallbackUserByPhone,
+  updateFallbackUser,
+} from '../lib/fallbackUsers'
 import { prisma } from '../lib/prisma'
 import { clearSessionCookie, requireSession, setSessionCookie } from '../middleware/session'
 
@@ -24,38 +30,39 @@ function normaliseName(name: string): { firstName: string; lastName: string } {
   return { firstName: parts[0] ?? '', lastName: parts.slice(1).join(' ') || '-' }
 }
 
-async function publicUser(userId: string, fallbackPhone?: string) {
+async function publicUser(userId: string) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { customerProfile: true, adminProfile: true },
     })
-    if (user && user.isActive) {
-      const name = user.customerProfile
-        ? `${user.customerProfile.firstName} ${user.customerProfile.lastName}`.trim()
-        : `${user.adminProfile?.firstName ?? ''} ${user.adminProfile?.lastName ?? ''}`.trim()
-      if (user.phoneNumber && name) {
-        return {
-          id: user.id,
-          name,
-          phone: user.phoneNumber,
-          ...(user.email ? { email: user.email } : {}),
-          role: user.role === 'ADMIN' ? 'admin' as const : 'customer' as const,
-          language: (user.customerProfile?.preferredLanguage === 'sn' || user.customerProfile?.preferredLanguage === 'nd'
-            ? user.customerProfile.preferredLanguage
-            : 'en') as 'en' | 'sn' | 'nd',
-        }
-      }
+    if (!user || !user.isActive) return null
+    const name = user.customerProfile
+      ? `${user.customerProfile.firstName} ${user.customerProfile.lastName}`.trim()
+      : `${user.adminProfile?.firstName ?? ''} ${user.adminProfile?.lastName ?? ''}`.trim()
+    if (!user.phoneNumber || !name) return null
+    return {
+      id: user.id,
+      name,
+      phone: user.phoneNumber,
+      ...(user.email ? { email: user.email } : {}),
+      role: user.role === 'ADMIN' ? 'admin' as const : 'customer' as const,
+      language: (user.customerProfile?.preferredLanguage === 'sn' || user.customerProfile?.preferredLanguage === 'nd'
+        ? user.customerProfile.preferredLanguage
+        : 'en') as 'en' | 'sn' | 'nd',
     }
-  } catch (err) {
-    // Database offline fallback
-  }
-  return {
-    id: userId || 'u-moyo',
-    name: 'Rutendo Moyo',
-    phone: fallbackPhone || '+263772123456',
-    role: 'customer' as const,
-    language: 'en' as const,
+  } catch {
+    // Database offline fallback: read from local persistent store instead of hardcoding a single demo user.
+    const fallback = findFallbackUserById(userId)
+    if (!fallback) return null
+    return {
+      id: fallback.id,
+      name: fallback.name,
+      phone: fallback.phone,
+      ...(fallback.email ? { email: fallback.email } : {}),
+      role: fallback.role === 'ADMIN' ? 'admin' as const : 'customer' as const,
+      language: fallback.language,
+    }
   }
 }
 
@@ -176,24 +183,37 @@ export function createAuthRouter(): Router {
         res.status(401).json({ code: 'otp_invalid', message: 'That code is incorrect or has expired.' })
         return
       }
-      let account: any = null
+      let account: { id: string; role: 'CUSTOMER' | 'ADMIN' } | null = null
+      let dbOnline = true
       try {
-        account = await prisma.user.findUnique({ where: { phoneNumber: parsed.data.phone } })
-        if (account?.id) {
-          await prisma.user.update({ where: { id: account.id }, data: { lastLoginAt: new Date() } }).catch(() => {})
+        const dbUser = await prisma.user.findUnique({ where: { phoneNumber: parsed.data.phone } })
+        if (dbUser) {
+          account = { id: dbUser.id, role: dbUser.role === 'ADMIN' ? 'ADMIN' : 'CUSTOMER' }
+          await prisma.user.update({ where: { id: dbUser.id }, data: { lastLoginAt: new Date() } }).catch(() => {})
         }
-      } catch (dbErr) {
-        // Fallback
+      } catch {
+        dbOnline = false
+      }
+      if (!dbOnline) {
+        const fallback = findFallbackUserByPhone(parsed.data.phone)
+        if (fallback) {
+          account = { id: fallback.id, role: fallback.role }
+          updateFallbackUser(fallback.id, { lastLoginAt: new Date().toISOString() })
+        }
       }
       if (!account) {
-        account = {
-          id: 'u-moyo',
-          role: parsed.data.phone.includes('admin') || parsed.data.phone.includes('790499962') ? 'ADMIN' : 'CUSTOMER',
-          phoneNumber: parsed.data.phone,
-        }
+        res.status(404).json({
+          code: 'account_not_found',
+          message: 'We could not find an account for that number. Please register first.',
+        })
+        return
       }
       setSessionCookie(res, { userId: account.id, role: account.role })
-      const user = await publicUser(account.id, parsed.data.phone)
+      const user = await publicUser(account.id)
+      if (!user) {
+        res.status(401).json({ code: 'unauthenticated', message: 'Sign in to continue.' })
+        return
+      }
       res.json(user)
     } catch (error) {
       next(error)
@@ -218,6 +238,7 @@ export function createAuthRouter(): Router {
       }
       let userId = `u-${Date.now().toString(36)}`
       let userRole: 'CUSTOMER' | 'ADMIN' = 'CUSTOMER'
+      let dbOnline = true
       try {
         if (await prisma.user.findUnique({ where: { phoneNumber: parsed.data.phone }, select: { id: true } })) {
           res.status(409).json({ code: 'account_exists', message: 'An account already uses this number. Sign in instead.' })
@@ -236,11 +257,24 @@ export function createAuthRouter(): Router {
         })
         userId = user.id
         userRole = user.role
-      } catch (dbErr) {
-        // In-memory user fallback
+      } catch {
+        dbOnline = false
+      }
+      if (!dbOnline) {
+        if (findFallbackUserByPhone(parsed.data.phone)) {
+          res.status(409).json({ code: 'account_exists', message: 'An account already uses this number. Sign in instead.' })
+          return
+        }
+        createFallbackUser({
+          id: userId,
+          name: parsed.data.name,
+          phone: parsed.data.phone,
+          email: parsed.data.email || undefined,
+          role: userRole,
+        })
       }
       setSessionCookie(res, { userId, role: userRole })
-      const response = await publicUser(userId, parsed.data.phone)
+      const response = await publicUser(userId)
 
       // Dual WhatsApp notifications for new registration (Customer + Fidelity Management)
       void notifyDual({
@@ -291,17 +325,25 @@ export function createAuthRouter(): Router {
       }
       const { firstName, lastName } = normaliseName(parsed.data.name)
       const current = req.sessionUser!
-      await prisma.$transaction(async (transaction) => {
-        await transaction.user.update({ where: { id: current.userId }, data: { email: parsed.data.email || null } })
-        if (current.role === 'CUSTOMER') {
-          await transaction.customerProfile.update({
-            where: { userId: current.userId },
-            data: { firstName, lastName, preferredLanguage: parsed.data.language },
-          })
-        } else {
-          await transaction.admin.update({ where: { userId: current.userId }, data: { firstName, lastName } })
-        }
-      })
+      try {
+        await prisma.$transaction(async (transaction) => {
+          await transaction.user.update({ where: { id: current.userId }, data: { email: parsed.data.email || null } })
+          if (current.role === 'CUSTOMER') {
+            await transaction.customerProfile.update({
+              where: { userId: current.userId },
+              data: { firstName, lastName, preferredLanguage: parsed.data.language },
+            })
+          } else {
+            await transaction.admin.update({ where: { userId: current.userId }, data: { firstName, lastName } })
+          }
+        })
+      } catch {
+        updateFallbackUser(current.userId, {
+          name: parsed.data.name,
+          email: parsed.data.email ?? '',
+          language: parsed.data.language,
+        })
+      }
       const user = await publicUser(req.sessionUser!.userId)
       if (!user) {
         res.status(401).json({ code: 'unauthenticated', message: 'Sign in to continue.' })
