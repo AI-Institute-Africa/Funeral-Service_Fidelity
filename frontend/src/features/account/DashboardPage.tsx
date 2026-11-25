@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Icon } from '@/components/ui/Icon'
 import { QueryState } from '@/components/ui/QueryState'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { paths } from '@/config/routes'
+import { contributePath, paths } from '@/config/routes'
+import { chemaStore } from '@/features/chema-wallet/store'
 import { useAuth } from '@/features/auth'
 import { OrdersSummaryCard } from '@/features/marketplace'
 import { MemorialsSummaryCard } from '@/features/memorials'
@@ -28,6 +30,11 @@ export default function DashboardPage() {
   const justLinked = useJustLinked(policy)
 
   const firstName = user?.name.split(' ')[0] ?? ''
+  const [shareOpen, setShareOpen] = useState(false)
+  const [copiedChema, setCopiedChema] = useState(false)
+  const chemaCases = chemaStore.getState().cases
+  const activeChema = chemaCases.find((entry) => entry.activated && entry.contributionToken) ?? chemaCases.find((entry) => Boolean(entry.contributionToken))
+  const chemaShareUrl = activeChema?.contributionToken ? `${window.location.origin}${contributePath(activeChema.contributionToken)}` : ''
 
   const statusLine = (() => {
     if (policy === undefined) return null
@@ -49,7 +56,75 @@ export default function DashboardPage() {
           <Link className="btn btn--outline" to={paths.accountPolicy}>
             {policy ? 'View my policy' : 'Link a policy'}
           </Link>
+          {chemaShareUrl ? (
+            <button type="button" className="btn btn--outline" onClick={() => setShareOpen((open) => !open)}>
+              <Icon name="wallet" size={18} />
+              Share Chema link
+            </button>
+          ) : (
+            <Link className="btn btn--outline" to={paths.accountChemaWallet}>
+              <Icon name="wallet" size={18} />
+              Share Chema link
+            </Link>
+          )}
         </div>
+        {shareOpen && chemaShareUrl && (
+          <div
+            role="region"
+            aria-label="Share Chema Wallet contribution link"
+            style={{
+              marginTop: '0.85rem',
+              padding: '0.85rem 1rem',
+              borderRadius: '10px',
+              background: 'rgba(255, 255, 255, 0.92)',
+              border: '1px solid rgba(185, 28, 28, 0.25)',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '0.6rem',
+              color: '#1f2937',
+            }}
+          >
+            <input
+              className="input"
+              readOnly
+              value={chemaShareUrl}
+              aria-label="Chema contribution link"
+              onFocus={(e) => e.currentTarget.select()}
+              style={{ flex: '1 1 240px', minWidth: 0 }}
+            />
+            <button
+              type="button"
+              className="btn btn--outline btn--sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(chemaShareUrl)
+                  setCopiedChema(true)
+                  window.setTimeout(() => setCopiedChema(false), 3000)
+                } catch {}
+              }}
+            >
+              {copiedChema ? '✓ Copied' : 'Copy link'}
+            </button>
+            <a
+              className="btn btn--primary btn--sm"
+              href={`https://wa.me/?text=${encodeURIComponent(`You can support the family through this verified Chema Wallet contribution page: ${chemaShareUrl}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Icon name="chat" size={16} /> Share via WhatsApp
+            </a>
+            <a
+              className="btn btn--outline btn--sm"
+              href={`mailto:?subject=${encodeURIComponent('Support the family — Chema Wallet Contribution Link')}&body=${encodeURIComponent(`Hello,\n\nYou can send a bereavement contribution (Chema) to support the family through this verified Chema Wallet page:\n\n${chemaShareUrl}\n\nThank you for your kindness and support.`)}`}
+            >
+              ✉️ Share via Email
+            </a>
+            <Link className="btn btn--outline btn--sm" to={contributePath(activeChema!.contributionToken)}>
+              Open page →
+            </Link>
+          </div>
+        )}
       </header>
 
       <div className="dashboard__grid">

@@ -17,7 +17,7 @@ import {
   type ContributionMethod,
 } from './data'
 import { chemaStore } from './store'
-import { ProgressBar } from './ChemaUI'
+import { ProgressBar, ShareLinkBox } from './ChemaUI'
 import './chema-wallet.css'
 
 type Stage = 'form' | 'review' | 'processing' | 'success' | 'failed' | 'pending'
@@ -299,6 +299,46 @@ export default function ContributePage() {
                 <div><Icon name="shield" size={18} /><span><strong>Verified before sharing</strong><small>The case and wallet authority were reviewed before this link was activated.</small></span></div>
                 <div><Icon name="lock" size={18} /><span><strong>Source-separated records</strong><small>Community money never mixes with Fidelity policy benefits or claims.</small></span></div>
                 <div><Icon name="check" size={18} /><span><strong>Receipt after confirmation</strong><small>A receipt is issued only when the provider confirms the payment.</small></span></div>
+              </div>
+            </section>
+
+            <section className="cw-public__card" aria-labelledby="cw-contributors-title">
+              <div className="cw-public__card-head">
+                <div>
+                  <p className="cw-eyebrow">Community support</p>
+                  <h2 id="cw-contributors-title">Who contributed</h2>
+                </div>
+                <StatusChip tone="success">{contributions.filter((c) => c.status === 'confirmed').length} confirmed</StatusChip>
+              </div>
+              {contributions.filter((c) => c.status === 'confirmed').length === 0 ? (
+                <p className="cw-public__empty">No confirmed contributions yet. Be the first to support the family.</p>
+              ) : (
+                <div className="cw-tributes">
+                  {contributions
+                    .filter((c) => c.status === 'confirmed')
+                    .map((c) => {
+                      const contributorLabel = c.anonymous ? 'Anonymous supporter' : c.contributorName || 'Community supporter'
+                      return (
+                        <article key={c.id} className="cw-tribute">
+                          <span className="cw-tribute__avatar" aria-hidden="true">{initial(contributorLabel)}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center' }}>
+                              <strong>{contributorLabel}</strong>
+                              {item.privacy.showAmounts && <strong>{money(c.amount)}</strong>}
+                            </div>
+                            {c.message && <p className="cw-tribute__message">“{c.message}”</p>}
+                            <p className="cw-tribute__meta">
+                              {methodLabels[c.method]} · {new Date(c.confirmedAt ?? c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </p>
+                          </div>
+                        </article>
+                      )
+                    })}
+                </div>
+              )}
+              <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
+                <p className="cw-eyebrow" style={{ marginBottom: '0.5rem' }}>Share this Chema link with others</p>
+                <ShareLinkBox url={window.location.href} compact />
               </div>
             </section>
 
