@@ -39,6 +39,15 @@ function IntakePage() {
   const [result, setResult] = useState<FuneralCaseRecord | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [burialOrderDoc, setBurialOrderDoc] = useState<{ fileName: string; dataUrl?: string } | null>(null)
+  const [policeClearanceDoc, setPoliceClearanceDoc] = useState<{ fileName: string; dataUrl?: string } | null>(null)
+
+  const readDocFile = (file: File | undefined, setter: (v: { fileName: string; dataUrl?: string } | null) => void) => {
+    if (!file) { setter(null); return }
+    const reader = new FileReader()
+    reader.onload = () => setter({ fileName: file.name, dataUrl: typeof reader.result === 'string' ? reader.result : undefined })
+    reader.readAsDataURL(file)
+  }
 
   const toggleService = (name: string) => {
     setSelectedServices((current) => current.includes(name) ? current.filter((entry) => entry !== name) : [...current, name])
@@ -103,11 +112,17 @@ function IntakePage() {
         applicationLocation: mode === 'apply' ? String(form.get('applicationLocation') ?? '') || undefined : undefined,
         requestedServices: selectedServices,
         whatsappConsent: form.get('whatsappConsent') === 'on',
+        documents: [
+          ...(burialOrderDoc ? [{ type: 'BURIAL_ORDER' as const, ...burialOrderDoc }] : []),
+          ...(policeClearanceDoc ? [{ type: 'POLICE_CLEARANCE' as const, ...policeClearanceDoc }] : []),
+        ],
       })
       setResult(item)
       setSelectedServices([])
       setPolicyCheckMessage('')
       setApplicationChannel('online')
+      setBurialOrderDoc(null)
+      setPoliceClearanceDoc(null)
       formElement.reset()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The case could not be saved. Please try again.')
@@ -218,6 +233,16 @@ function IntakePage() {
                     <label className="field"><span className="field__label">Town or service area</span><input className="input" name="serviceLocation" required maxLength={200} /></label>
                     <label className="field"><span className="field__label">Burial expected date and time (if known)</span><input className="input" name="funeralAt" type="datetime-local" /></label>
                     <label className="field intake__wide"><span className="field__label">Funeral location (if known)</span><input className="input" name="funeralLocation" maxLength={200} /></label>
+                    <label className="field">
+                      <span className="field__label">Burial Order (PDF or image)</span>
+                      <input className="input" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(e) => readDocFile(e.target.files?.[0], setBurialOrderDoc)} />
+                      {burialOrderDoc && <small className="muted">Attached: {burialOrderDoc.fileName}</small>}
+                    </label>
+                    <label className="field">
+                      <span className="field__label">Police Clearance (PDF or image)</span>
+                      <input className="input" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(e) => readDocFile(e.target.files?.[0], setPoliceClearanceDoc)} />
+                      {policeClearanceDoc && <small className="muted">Attached: {policeClearanceDoc.fileName}</small>}
+                    </label>
                   </div>
                 </>
               ) : (

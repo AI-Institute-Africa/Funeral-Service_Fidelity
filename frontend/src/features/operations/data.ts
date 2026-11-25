@@ -90,13 +90,141 @@ export type TaskLogEntry = {
   whatsappSynced?: boolean
 }
 
+const TASK_STEP_PRESETS: Array<{ match: RegExp; steps: string[] }> = [
+  {
+    match: /body removal|collection/i,
+    steps: [
+      'Confirm exact pickup address (hospital, mortuary, or residence) & family contact',
+      'Dispatch removal vehicle with stretcher, PPE, and identification tag',
+      'Verify deceased identity & log condition on removal transfer sheet',
+      'Admit body into Fidelity / partner mortuary cold room & notify family',
+    ],
+  },
+  {
+    match: /mortuary|overnight/i,
+    steps: [
+      'Log mortuary cold-room admission & assign storage bay tag',
+      'Verify Burial Order and Police Clearance before preparation',
+      'Complete hygienic washing, dressing, and embalming as instructed',
+      'Prepare viewing room & confirm presentation time with family',
+    ],
+  },
+  {
+    match: /coffin|casket/i,
+    steps: [
+      'Confirm selected casket model, dimensions, and interior finish with family',
+      'Inspect casket shell, handles, and lining in workshop / store',
+      'Engrave and mount brass nameplate with full name and dates',
+      'Stage casket for hearse loading and sign off dispatch checklist',
+    ],
+  },
+  {
+    match: /hearse|transport to gravesite|burial-day transport/i,
+    steps: [
+      'Confirm church/chapel route, departure time, and cemetery coordinates',
+      'Inspect hearse cleanliness, fuel level, and ceremonial fittings',
+      'Load casket securely and lead family convoy on schedule',
+      'Arrive at gravesite and coordinate pallbearer unloading',
+    ],
+  },
+  {
+    match: /tent|chairs/i,
+    steps: [
+      'Confirm expected guest count, tent size, and venue ground conditions',
+      'Load marquee tent, chairs, tables, and sound/shade gear onto truck',
+      'Erect tent, anchor guy-ropes, and arrange seating before mourners arrive',
+      'Strike down, count, and collect all equipment after the service',
+    ],
+  },
+  {
+    match: /burial setup|lowering|equipment/i,
+    steps: [
+      'Confirm cemetery plot number and grave excavation readiness',
+      'Stage lowering device, webbing straps, artificial turf, and gazebo',
+      'Test lowering mechanism and brief pallbearers before committal',
+      'Complete lowering, retrieve gear, and record graveside sign-off',
+    ],
+  },
+  {
+    match: /case intake|eligibility/i,
+    steps: [
+      'Verify reporter identity and registered contact phone number',
+      'Check policy status, waiting period, or walk-in payment path',
+      'Record deceased particulars, date of death, and requested services',
+      'Assign Fidelity staff coordinator & activate family WhatsApp group',
+    ],
+  },
+  {
+    match: /post-mortem/i,
+    steps: [
+      'Confirm with family and medical/police authorities if post-mortem is required',
+      'Schedule pathology examination and arrange mortuary transfer if needed',
+      'Collect post-mortem report / cause-of-death certificate',
+      'Update case file and clear body for final preparation',
+    ],
+  },
+  {
+    match: /burial order|police clearance/i,
+    steps: [
+      'Collect uploaded Burial Order and verify issuing registrar details',
+      'Collect uploaded Police Clearance / Death Certificate and check stamps',
+      'Cross-check deceased particulars against policy / intake record',
+      'Mark statutory clearances verified and archive copies in case file',
+    ],
+  },
+  {
+    match: /service underway|burial \/ service/i,
+    steps: [
+      'Confirm officiant, family representatives, and pallbearers are in place',
+      'Monitor chapel/graveside programme timing and sound/tent readiness',
+      'Support committal rites and graveside lowering',
+      'Confirm safe departure of family and crew from cemetery',
+    ],
+  },
+  {
+    match: /burial completed/i,
+    steps: [
+      'Confirm grave backfilling and floral placement completed',
+      'Retrieve all Fidelity lowering gear, tents, chairs, and signage',
+      'Confirm family acknowledgement and update case status to completed',
+      'Send completion update to the family WhatsApp coordination group',
+    ],
+  },
+  {
+    match: /settlement|reconciliation/i,
+    steps: [
+      'Reconcile final service invoice against policy benefit or cash payments',
+      'Verify any Chema Wallet contributions and approved payout disbursements',
+      'Post final settlement and receipts to Fidelity Life ERP',
+      'Resolve any outstanding balances or adjustments with family',
+    ],
+  },
+  {
+    match: /case closed/i,
+    steps: [
+      'Confirm all services, documents, and ERP financial entries are finalized',
+      'Archive digital funeral record and memorial link for the family',
+      'Close case WhatsApp coordination group with family consent',
+      'Trigger aftercare & bereavement support follow-up',
+    ],
+  },
+]
+
 export function createDefaultTaskSteps(taskName: string): TaskStep[] {
-  return [
-    { id: 'step-1', label: `Acknowledge assignment for "${taskName}"`, done: false },
-    { id: 'step-2', label: 'Confirm logistics, equipment & team readiness', done: false },
-    { id: 'step-3', label: 'Execute task & record field progress in logbook', done: false },
-    { id: 'step-4', label: 'Verify completion & notify family/WhatsApp group', done: false },
-  ]
+  const preset = TASK_STEP_PRESETS.find((entry) => entry.match.test(taskName))
+  const labels = preset
+    ? preset.steps
+    : [
+        `Confirm scope & schedule for "${taskName}"`,
+        `Assign Fidelity staff & prepare resources for "${taskName}"`,
+        `Execute "${taskName}" and record field update in logbook`,
+        `Verify completion of "${taskName}" & notify case WhatsApp group`,
+      ]
+  return labels.map((label, idx) => ({
+    id: `step-${idx + 1}`,
+    label,
+    done: false,
+  }))
 }
 
 export type CaseStage = {
@@ -438,6 +566,8 @@ export function createCaseStages(): CaseStage[] {
     assignedTo: '',
     notes: '',
     blocker: '',
+    steps: createDefaultTaskSteps(label),
+    logbook: [],
   }))
 }
 

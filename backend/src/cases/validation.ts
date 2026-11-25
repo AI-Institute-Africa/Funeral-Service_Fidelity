@@ -16,6 +16,12 @@ function isCalendarDate(value: string): boolean {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
 }
 
+export const caseDocumentSchema = z.object({
+  type: z.enum(['BURIAL_ORDER', 'POLICE_CLEARANCE']),
+  fileName: z.string().trim().min(1).max(240),
+  dataUrl: z.string().max(5_000_000).optional(),
+})
+
 export const caseInputSchema = z.object({
   caseType: z.enum(['POLICY_COVERED', 'WALK_IN_COVERAGE']),
   reporterName: z.string().trim().min(2).max(120),
@@ -31,6 +37,7 @@ export const caseInputSchema = z.object({
   applicationLocation: z.string().trim().max(200).optional(),
   requestedServices: z.array(z.enum(funeralServiceOptions)).min(1).max(funeralServiceOptions.length),
   whatsappConsent: z.boolean(),
+  documents: z.array(caseDocumentSchema).max(4).optional(),
 }).superRefine((value, context) => {
   if (value.caseType === 'POLICY_COVERED') {
     if (!value.deceasedName) context.addIssue({ code: 'custom', path: ['deceasedName'], message: 'Enter the deceased person’s name.' })

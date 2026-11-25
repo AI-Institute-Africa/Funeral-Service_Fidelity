@@ -1,5 +1,21 @@
 import { get, post } from '@/lib/http'
 
+export type CaseDocumentRecord = {
+  id: string
+  type: 'BURIAL_ORDER' | 'POLICE_CLEARANCE'
+  fileName: string
+  status: 'RECEIVED' | 'VERIFIED'
+  uploadedAt: string
+}
+
+export type TrackingEventRecord = {
+  id: string
+  label: string
+  detail: string
+  status: 'completed' | 'in_progress' | 'pending'
+  at: string | null
+}
+
 export type FuneralCaseRecord = {
   id: string
   reference: string
@@ -20,6 +36,8 @@ export type FuneralCaseRecord = {
   coverageReviewStatus: string
   createdAt: string
   assignedStaff: { id: string; name: string; phoneNumber: string | null } | null
+  documents?: CaseDocumentRecord[]
+  trackingEvents?: TrackingEventRecord[]
   whatsappGroup: {
     status: string
     error: string | null
@@ -42,6 +60,7 @@ export type FuneralCaseInput = {
   applicationLocation?: string
   requestedServices: string[]
   whatsappConsent: boolean
+  documents?: { type: "BURIAL_ORDER" | "POLICE_CLEARANCE"; fileName: string; dataUrl?: string }[]
 }
 
 export type CaseStaff = { id: string; name: string; jobTitle?: string; phoneNumber: string | null }
@@ -56,3 +75,8 @@ export const retryCaseWhatsAppGroup = (caseId: string) =>
   post<{ status: string; error: string | null }>(`/admin/funeral-cases/${encodeURIComponent(caseId)}/whatsapp/retry`, {})
 export const inviteCaseRelative = (caseId: string, input: { name: string; relationship: string; phoneNumber: string; confirmsConsent: true }) =>
   post<{ status: string }>(`/me/funeral-cases/${encodeURIComponent(caseId)}/participants`, input)
+
+export const uploadCaseDocument = (
+  caseId: string,
+  doc: { type: 'BURIAL_ORDER' | 'POLICE_CLEARANCE'; fileName: string; dataUrl?: string },
+) => post<CaseDocumentRecord>(`/me/funeral-cases/${encodeURIComponent(caseId)}/documents`, doc)

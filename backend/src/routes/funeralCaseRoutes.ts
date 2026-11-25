@@ -4,12 +4,96 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAdminSession, requireSession } from '../middleware/session'
 import { bridgeSyncCaseGroup } from '../whatsapp/bridgeClient'
-import { createWhatsAppFuneralGroup } from '../services/whatsappGateway'
-import { assignmentSchema, caseIdSchema, caseInputSchema, relativeSchema } from '../cases/validation'
+import { createWhatsAppFuneralGroup, sendToCaseWhatsAppGroup } from '../services/whatsappGateway'
+import { assignmentSchema, caseDocumentSchema, caseIdSchema, caseInputSchema, relativeSchema } from '../cases/validation'
 import { dispatchWorkflowNotifications } from '../services/multiChannelNotifier'
 
 function reference(): string {
   return `FLA-${randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`
+}
+
+type StoredCaseDocument = {
+  id: string
+  type: 'BURIAL_ORDER' | 'POLICE_CLEARANCE'
+  fileName: string
+  status: 'RECEIVED' | 'VERIFIED'
+  uploadedAt: string
+  dataUrl?: string
+}
+
+type StoredTrackingEvent = {
+  id: string
+  label: string
+  detail: string
+  status: 'completed' | 'in_progress' | 'pending'
+  at: string | null
+}
+
+const inMemoryCaseDocuments = new Map<string, StoredCaseDocument[]>()
+const inMemoryTrackingEvents = new Map<string, StoredTrackingEvent[]>()
+
+function buildDefaultTrackingEvents(item: {
+  id: string
+  status: string
+  createdAt: Date
+  assignedStaff?: unknown
+  funeralAt?: Date | null
+  whatsappGroup?: { status: string } | null
+}, docs: StoredCaseDocument[]): StoredTrackingEvent[] {
+  const custom = inMemoryTrackingEvents.get(item.id) ?? []
+  const hasBurialOrder = docs.some((d) => d.type === 'BURIAL_ORDER')
+  const hasPoliceClearance = docs.some((d) => d.type === 'POLICE_CLEARANCE')
+  const isAssigned = Boolean(item.assignedStaff) || item.status === 'ASSIGNED' || item.status === 'COMPLETED'
+  const isCompleted = item.status === 'COMPLETED' || item.status === 'CLOSED'
+  const events: StoredTrackingEvent[] = [
+    {
+      id: `${item.id}-evt-1`,
+      label: 'Funeral case submitted',
+      detail: 'Your case has been registered with Fidelity Operations.',
+      status: 'completed',
+      at: item.createdAt.toISOString(),
+    },
+    {
+      id: `${item.id}-evt-2`,
+      label: 'Fidelity coordinator assigned',
+      detail: isAssigned ? 'A Fidelity staff coordinator is actively managing this case.' : 'Awaiting Fidelity staff coordinator assignment.',
+      status: isAssigned ? 'completed' : 'in_progress',
+      at: isAssigned ? new Date().toISOString() : null,
+    },
+    {
+      id: `${item.id}-evt-3`,
+      label: 'Burial order & police clearance',
+      detail: hasBurialOrder && hasPoliceClearance
+        ? 'Both Burial Order and Police Clearance have been uploaded.'
+        : hasBurialOrder || hasPoliceClearance
+          ? 'One document uploaded. Please upload the remaining clearance document.'
+          : 'Upload Burial Order and Police Clearance to proceed.',
+      status: hasBurialOrder && hasPoliceClearance ? 'completed' : 'in_progress',
+      at: docs[0]?.uploadedAt ?? null,
+    },
+    {
+      id: `${item.id}-evt-4`,
+      label: 'WhatsApp coordination group',
+      detail: item.whatsappGroup?.status === 'ACTIVE' ? 'Private WhatsApp coordination group is active.' : 'WhatsApp group setup pending.',
+      status: item.whatsappGroup?.status === 'ACTIVE' ? 'completed' : 'pending',
+      at: item.whatsappGroup?.status === 'ACTIVE' ? item.createdAt.toISOString() : null,
+    },
+    {
+      id: `${item.id}-evt-5`,
+      label: 'Service preparation & burial',
+      detail: item.funeralAt ? `Scheduled for ${item.funeralAt.toLocaleDateString('en-GB')}` : 'Preparation and logistics underway.',
+      status: isCompleted ? 'completed' : isAssigned ? 'in_progress' : 'pending',
+      at: isCompleted ? new Date().toISOString() : null,
+    },
+    {
+      id: `${item.id}-evt-6`,
+      label: 'Case completed',
+      detail: isCompleted ? 'All funeral services and documentation completed.' : 'Will be marked complete once burial and settlement finish.',
+      status: isCompleted ? 'completed' : 'pending',
+      at: isCompleted ? new Date().toISOString() : null,
+    },
+  ]
+  return [...events, ...custom]
 }
 
 function asPublicCase(item: {
@@ -58,6 +142,8 @@ function asPublicCase(item: {
       name: `${item.assignedStaff.adminProfile?.firstName ?? ''} ${item.assignedStaff.adminProfile?.lastName ?? ''}`.trim(),
       phoneNumber: item.assignedStaff.phoneNumber,
     } : null,
+    documents: (inMemoryCaseDocuments.get(item.id) ?? []).map(({ id, type, fileName, status, uploadedAt }) => ({ id, type, fileName, status, uploadedAt })),
+    trackingEvents: buildDefaultTrackingEvents(item, inMemoryCaseDocuments.get(item.id) ?? []),
     whatsappGroup: item.whatsappGroup ? {
       status: item.whatsappGroup.status,
       error: item.whatsappGroup.error,
@@ -157,6 +243,14 @@ export function createFuneralCaseRouter(): Router {
       }
       const input = parsed.data
       const cleanPolicyNumber = input.policyNumber?.trim().toUpperCase() || undefined
+      const initialDocs: StoredCaseDocument[] = (input.documents ?? []).map((doc) => ({
+        id: randomUUID(),
+        type: doc.type,
+        fileName: doc.fileName,
+        status: 'RECEIVED',
+        uploadedAt: new Date().toISOString(),
+        dataUrl: doc.dataUrl,
+      }))
       const id = randomUUID()
       const caseReference = reference()
       const now = new Date()
@@ -253,6 +347,7 @@ export function createFuneralCaseRouter(): Router {
           where: { id: item.id },
           include: { whatsappGroup: { include: { participants: true } } },
         })
+        if (initialDocs.length) inMemoryCaseDocuments.set(item.id, initialDocs)
         res.status(201).json(asPublicCase(updated))
         return
       } catch (_dbErr) {
@@ -285,6 +380,7 @@ export function createFuneralCaseRouter(): Router {
               : [],
           },
         }
+        if (initialDocs.length) inMemoryCaseDocuments.set(memoryItem.id, initialDocs)
         inMemoryFuneralCases.unshift(memoryItem)
 
         void createWhatsAppFuneralGroup({
@@ -296,6 +392,47 @@ export function createFuneralCaseRouter(): Router {
 
         res.status(201).json(asPublicCase(memoryItem))
       }
+    } catch (error) {
+      next(error)
+    }
+  })
+
+  router.post('/me/funeral-cases/:caseId/documents', requireSession, async (req, res, next) => {
+    try {
+      const parsed = caseDocumentSchema.safeParse(req.body)
+      if (!parsed.success) {
+        res.status(422).json({ code: 'validation_failed', message: parsed.error.issues[0]?.message ?? 'Provide a valid document file.' })
+        return
+      }
+      const caseId = String(req.params.caseId)
+      const existing = inMemoryCaseDocuments.get(caseId) ?? []
+      const nextDoc: StoredCaseDocument = {
+        id: randomUUID(),
+        type: parsed.data.type,
+        fileName: parsed.data.fileName,
+        status: 'RECEIVED',
+        uploadedAt: new Date().toISOString(),
+        dataUrl: parsed.data.dataUrl,
+      }
+      const filtered = existing.filter((doc) => doc.type !== parsed.data.type)
+      inMemoryCaseDocuments.set(caseId, [...filtered, nextDoc])
+
+      const memCase = inMemoryFuneralCases.find((item) => item.id === caseId)
+      if (memCase) {
+        void sendToCaseWhatsAppGroup({
+          caseReference: memCase.reference,
+          familyPhone: memCase.contactPhone,
+          message: `📄 Document uploaded for ${memCase.deceasedName || memCase.reference}: ${parsed.data.type === 'BURIAL_ORDER' ? 'Burial Order' : 'Police Clearance'} (${parsed.data.fileName})`,
+        }).catch(() => {})
+      }
+
+      res.status(201).json({
+        id: nextDoc.id,
+        type: nextDoc.type,
+        fileName: nextDoc.fileName,
+        status: nextDoc.status,
+        uploadedAt: nextDoc.uploadedAt,
+      })
     } catch (error) {
       next(error)
     }
