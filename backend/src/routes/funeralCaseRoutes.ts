@@ -84,6 +84,14 @@ async function syncWhatsAppGroup(caseId: string): Promise<void> {
   })
 }
 
+const inMemoryStaff = [
+  { id: 'staff-nomsa', name: 'Nomsa Ndlovu', jobTitle: 'Head of Funeral Operations', phoneNumber: '+263773000333' },
+  { id: 'staff-tariro', name: 'Tariro Chikwanha', jobTitle: 'Senior Case Lead', phoneNumber: '+263790499962' },
+  { id: 'staff-farai', name: 'Farai Gumbo', jobTitle: 'Mortuary & Logistics Lead', phoneNumber: '+263772555666' },
+  { id: 'staff-blessing', name: 'Blessing Moyo', jobTitle: 'Transport & Fleet', phoneNumber: '+263771888999' },
+  { id: 'staff-chipo', name: 'Chipo Dube', jobTitle: 'Chapel & Ceremonies', phoneNumber: '+263773000222' },
+]
+
 const inMemoryFuneralCases: any[] = [
   {
     id: 'fc-nyathi-001',
@@ -404,26 +412,60 @@ export function createFuneralCaseRouter(): Router {
     res.json(inMemoryFuneralCases.map(asPublicCase))
   })
 
-  router.get('/admin/funeral-cases/staff', requireAdminSession, async (_req, res, next) => {
+  router.get('/admin/funeral-cases/staff', requireAdminSession, async (_req, res) => {
     try {
       const staff = await prisma.user.findMany({
         where: { role: 'ADMIN', isActive: true },
         select: { id: true, phoneNumber: true, adminProfile: { select: { firstName: true, lastName: true, jobTitle: true } } },
         orderBy: { createdAt: 'asc' },
       })
-      res.json(staff.map((item) => ({
-        id: item.id,
-        name: `${item.adminProfile?.firstName ?? ''} ${item.adminProfile?.lastName ?? ''}`.trim(),
-        jobTitle: item.adminProfile?.jobTitle,
-        phoneNumber: item.phoneNumber,
-      })))
-    } catch (error) {
-      next(error)
+      if (staff && staff.length) {
+        res.json(staff.map((item) => ({
+          id: item.id,
+          name: `${item.adminProfile?.firstName ?? ''} ${item.adminProfile?.lastName ?? ''}`.trim(),
+          jobTitle: item.adminProfile?.jobTitle,
+          phoneNumber: item.phoneNumber,
+        })))
+        return
+      }
+    } catch (_dbErr) {
+      // In-memory staff fallback
     }
+    res.json(inMemoryStaff)
   })
 
   router.post('/admin/funeral-cases/:caseId/assign', requireAdminSession, async (req, res, next) => {
     try {
+      const staffUserId = typeof req.body?.staffUserId === 'string' ? req.body.staffUserId.trim() : ''
+      if (!staffUserId) {
+        res.status(422).json({ code: 'validation_failed', message: 'Choose an active Fidelity staff member. People assigned must be Fidelity Staff members only.' })
+        return
+      }
+      const memStaff = inMemoryStaff.find((s) => s.id === staffUserId)
+      const memCase = inMemoryFuneralCases.find((item) => item.id === req.params.caseId)
+      if (memCase) {
+        if (!memStaff) {
+          res.status(422).json({ code: 'invalid_staff', message: 'That Fidelity staff account is not active. People assigned must be Fidelity Staff members only.' })
+          return
+        }
+        const [firstName, ...rest] = memStaff.name.split(' ')
+        memCase.assignedStaff = {
+          id: memStaff.id,
+          phoneNumber: memStaff.phoneNumber,
+          adminProfile: { firstName, lastName: rest.join(' ') },
+        }
+        memCase.status = 'ASSIGNED'
+        void dispatchWorkflowNotifications({
+          event: 'case_assigned',
+          caseReference: memCase.reference,
+          deceasedName: memCase.deceasedName || undefined,
+          customer: { name: memCase.reporterName, phone: memCase.contactPhone },
+          assignedStaff: { name: memStaff.name, phone: memStaff.phoneNumber },
+        })
+        res.json(asPublicCase(memCase))
+        return
+      }
+
       const parsed = assignmentSchema.safeParse(req.body)
       if (!parsed.success) {
         res.status(422).json({ code: 'validation_failed', message: 'Choose an active Fidelity staff member. People assigned must be Fidelity Staff members only.' })
@@ -472,10 +514,16 @@ export function createFuneralCaseRouter(): Router {
               caseId: funeralCase.id,
               groupId: funeralCase.whatsappGroup?.id,
               phoneNumber: staff.phoneNumber,
-              displayName: `${staff.adminProfile?.firstName ?? ''} ${staff.adminProfile?.lastName ?? ''}`.trim() || 'Fidelity staff',
+              displayName: `${staff.adminProfile?.firstName ?? ''} ${staff.adminProfile?.lastName ?? ''}`.trim() || 'Fidelity Coordinator',
               participantType: 'STAFF',
+              consentAt: new Date(),
             },
-            update: { participantType: 'STAFF', addedAt: null, removedAt: null },
+            update: {
+              displayName: `${staff.adminProfile?.firstName ?? ''} ${staff.adminProfile?.lastName ?? ''}`.trim() || 'Fidelity Coordinator',
+              participantType: 'STAFF',
+              removedAt: null,
+              addedAt: null,
+            },
           })
         }
         await transaction.auditLog.create({
@@ -483,33 +531,26 @@ export function createFuneralCaseRouter(): Router {
             actorUserId: req.sessionUser!.userId,
             entityType: 'funeral_case',
             entityId: funeralCase.id,
-            actionType: 'ASSIGN',
-            detailsJson: { assignedStaffUserId: staff.id },
+            actionType: 'UPDATE',
+            detailsJson: { action: 'assign_staff', assignedStaffUserId: staff.id },
           },
         })
       })
       if (funeralCase.whatsappConsentAt) await syncWhatsAppGroup(funeralCase.id)
-      const staffName = `${staff.adminProfile?.firstName ?? ''} ${staff.adminProfile?.lastName ?? ''}`.trim() || 'Fidelity staff'
-      void dispatchWorkflowNotifications({
-        event: 'case_assigned',
-        caseReference: funeralCase.reference,
-        deceasedName: funeralCase.deceasedName ?? undefined,
-        customer: {
-          name: funeralCase.reporterName,
-          phone: funeralCase.contactPhone,
-        },
-        assignedStaff: {
-          name: staffName,
-          phone: staff.phoneNumber ?? undefined,
-          jobTitle: staff.adminProfile?.jobTitle ?? undefined,
-        },
-      })
       const updated = await prisma.funeralCase.findUniqueOrThrow({
         where: { id: funeralCase.id },
         include: {
           assignedStaff: { select: { id: true, phoneNumber: true, adminProfile: { select: { firstName: true, lastName: true } } } },
           whatsappGroup: { include: { participants: true } },
         },
+      })
+      const staffName = `${staff.adminProfile?.firstName ?? ''} ${staff.adminProfile?.lastName ?? ''}`.trim() || 'Fidelity Coordinator'
+      void dispatchWorkflowNotifications({
+        event: 'case_assigned',
+        caseReference: updated.reference,
+        deceasedName: updated.deceasedName || undefined,
+        customer: { name: updated.reporterName, phone: updated.contactPhone },
+        assignedStaff: { name: staffName, phone: staff.phoneNumber || undefined },
       })
       res.json(asPublicCase(updated))
     } catch (error) {

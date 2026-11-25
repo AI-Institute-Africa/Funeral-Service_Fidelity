@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Callout } from '@/components/ui/Callout'
-import { DEMO_OTP, formatPhone } from '@/features/auth'
+import { formatPhone } from '@/features/auth'
 import { getErrorMessage } from '@/lib/api-error'
-import { env } from '@/lib/env'
 import { OtpInput } from './OtpInput'
 
 const RESEND_SECONDS = 30
@@ -46,14 +45,8 @@ export function OtpVerify({ phone, onSubmit, onResend, onBack, isSubmitting, err
     <div className="auth-step">
       <h1 className="auth-step__title">Enter your code</h1>
       <p className="muted">
-        We sent a 6-digit code to <strong>{formatPhone(phone)}</strong>.
+        We sent a 6-digit code via WhatsApp to <strong>{formatPhone(phone)}</strong>.
       </p>
-
-      {env.useMock && (
-        <Callout tone="info">
-          Demo mode: use code <strong>{DEMO_OTP}</strong>.
-        </Callout>
-      )}
 
       <OtpInput value={code} onChange={setCode} onComplete={onSubmit} disabled={isSubmitting} invalid={Boolean(error)} />
 

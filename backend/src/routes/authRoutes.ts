@@ -10,6 +10,7 @@ import { clearSessionCookie, requireSession, setSessionCookie } from '../middlew
 const OTP_TTL_MS = 5 * 60_000
 const OTP_RESEND_MS = 60_000
 const OTP_MAX_ATTEMPTS = 5
+const inMemoryOtpChallenges = new Map<string, { codeHash: string; expiresAt: Date; attempts: number; lastSentAt: Date }>()
 
 const phoneSchema = z.string().regex(/^\+[1-9]\d{7,14}$/, 'Enter a valid phone number with country code.')
 const otpSchema = z.string().regex(/^\d{6}$/, 'Enter the six-digit code.')
@@ -23,7 +24,7 @@ function normaliseName(name: string): { firstName: string; lastName: string } {
   return { firstName: parts[0] ?? '', lastName: parts.slice(1).join(' ') || '-' }
 }
 
-async function publicUser(userId: string) {
+async function publicUser(userId: string, fallbackPhone?: string) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -52,29 +53,48 @@ async function publicUser(userId: string) {
   return {
     id: userId || 'u-moyo',
     name: 'Rutendo Moyo',
-    phone: '+263772123456',
+    phone: fallbackPhone || '+263772123456',
     role: 'customer' as const,
     language: 'en' as const,
   }
 }
 
 async function consumeOtp(phone: string, code: string): Promise<boolean> {
-  const challenge = await prisma.otpChallenge.findUnique({
-    where: { phone_purpose: { phone, purpose: 'login' } },
-  })
-  if (!challenge || challenge.expiresAt <= new Date() || challenge.attempts >= OTP_MAX_ATTEMPTS) return false
-  const expected = Buffer.from(challenge.codeHash, 'hex')
+  try {
+    const challenge = await prisma.otpChallenge.findUnique({
+      where: { phone_purpose: { phone, purpose: 'login' } },
+    })
+    if (challenge) {
+      if (challenge.expiresAt <= new Date() || challenge.attempts >= OTP_MAX_ATTEMPTS) return false
+      const expected = Buffer.from(challenge.codeHash, 'hex')
+      const actual = Buffer.from(hashOtp(phone, code), 'hex')
+      const valid = expected.length === actual.length && expected.length > 0 && timingSafeEqual(expected, actual)
+      if (!valid) {
+        await prisma.otpChallenge.updateMany({
+          where: { id: challenge.id, attempts: { lt: OTP_MAX_ATTEMPTS } },
+          data: { attempts: { increment: 1 } },
+        })
+        return false
+      }
+      const removed = await prisma.otpChallenge.deleteMany({ where: { id: challenge.id, codeHash: challenge.codeHash } })
+      inMemoryOtpChallenges.delete(phone)
+      return removed.count === 1
+    }
+  } catch (_dbErr) {
+    // Database offline fallback
+  }
+
+  const mem = inMemoryOtpChallenges.get(phone)
+  if (!mem || mem.expiresAt <= new Date() || mem.attempts >= OTP_MAX_ATTEMPTS) return false
+  const expected = Buffer.from(mem.codeHash, 'hex')
   const actual = Buffer.from(hashOtp(phone, code), 'hex')
   const valid = expected.length === actual.length && expected.length > 0 && timingSafeEqual(expected, actual)
   if (!valid) {
-    await prisma.otpChallenge.updateMany({
-      where: { id: challenge.id, attempts: { lt: OTP_MAX_ATTEMPTS } },
-      data: { attempts: { increment: 1 } },
-    })
+    mem.attempts += 1
     return false
   }
-  const removed = await prisma.otpChallenge.deleteMany({ where: { id: challenge.id, codeHash: challenge.codeHash } })
-  return removed.count === 1
+  inMemoryOtpChallenges.delete(phone)
+  return true
 }
 
 export function createAuthRouter(): Router {
@@ -90,6 +110,17 @@ export function createAuthRouter(): Router {
       const phone = parsed.data.phone
       const code = String(randomInt(100_000, 1_000_000))
       const now = new Date()
+      const existingMem = inMemoryOtpChallenges.get(phone)
+      if (existingMem && Date.now() - existingMem.lastSentAt.getTime() < OTP_RESEND_MS) {
+        res.status(429).json({ code: 'rate_limited', message: 'Wait a moment before requesting another code.' })
+        return
+      }
+      inMemoryOtpChallenges.set(phone, {
+        codeHash: hashOtp(phone, code),
+        expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+        attempts: 0,
+        lastSentAt: now,
+      })
       try {
         const existing = await prisma.otpChallenge.findUnique({
           where: { phone_purpose: { phone, purpose: 'login' } },
@@ -114,7 +145,8 @@ export function createAuthRouter(): Router {
       const smsSent = await createSmsProvider().send(phone, `Your Fidelity Life sign-in code is ${code}. It expires in 5 minutes. Do not share it with anyone.`)
 
       if (!waResult.ok && !smsSent.ok) {
-        await prisma.otpChallenge.deleteMany({ where: { phone, purpose: 'login', codeHash: hashOtp(phone, code) } })
+        inMemoryOtpChallenges.delete(phone)
+        await prisma.otpChallenge.deleteMany({ where: { phone, purpose: 'login', codeHash: hashOtp(phone, code) } }).catch(() => {})
         console.error('[auth] OTP delivery failed via both WhatsApp and SMS:', { wa: waResult.error, sms: smsSent.error })
         res.status(503).json({ code: 'otp_delivery_failed', message: 'We could not deliver a sign-in code. Please try again later.' })
         return
@@ -126,7 +158,7 @@ export function createAuthRouter(): Router {
         expiresInSeconds: OTP_TTL_MS / 1000,
         whatsappDelivered: waResult.ok,
         whatsappQueued: Boolean(waResult.queued),
-        ...(env.isProduction ? {} : { code }),
+
       })
     } catch (error) {
       next(error)
@@ -161,7 +193,7 @@ export function createAuthRouter(): Router {
         }
       }
       setSessionCookie(res, { userId: account.id, role: account.role })
-      const user = await publicUser(account.id)
+      const user = await publicUser(account.id, parsed.data.phone)
       res.json(user)
     } catch (error) {
       next(error)
@@ -208,7 +240,7 @@ export function createAuthRouter(): Router {
         // In-memory user fallback
       }
       setSessionCookie(res, { userId, role: userRole })
-      const response = await publicUser(userId)
+      const response = await publicUser(userId, parsed.data.phone)
 
       // Dual WhatsApp notifications for new registration (Customer + Fidelity Management)
       void notifyDual({

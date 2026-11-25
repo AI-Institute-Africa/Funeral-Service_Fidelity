@@ -15,6 +15,7 @@ import {
   saveTokenCharge,
   createAuditEntry,
 } from './operations-api'
+import { getAdminFuneralCases } from './cases-api'
 import { useAuth } from '@/features/auth'
 import { findPolicyByNumber, policyRecords } from '@/features/account'
 import {
@@ -172,6 +173,61 @@ function OperationsPage() {
         stateRef.current = remoteState
         saveOperationsState(remoteState)
         setStorageError('')
+        void getAdminFuneralCases().then((reported) => {
+          if (!mounted || !reported.length) return
+          setState((current) => {
+            const existingRefs = new Set(current.cases.map((item) => item.reference))
+            const additions: FuneralCase[] = reported
+              .filter((fc) => !existingRefs.has(fc.reference))
+              .map((fc) => ({
+                id: fc.id,
+                reference: fc.reference,
+                type: fc.caseType === 'WALK_IN_COVERAGE' ? 'cash-walk-in' : 'policy-covered',
+                customerName: fc.reporterName,
+                phone: fc.contactPhone,
+                deceasedName: fc.deceasedName || fc.reporterName,
+                dateOfDeath: fc.dateOfDeath || '',
+                serviceLocation: fc.serviceLocation || '',
+                branch: fc.serviceLocation || 'Harare',
+                funeralAt: fc.funeralAt || undefined,
+                funeralLocation: fc.funeralLocation || '',
+                coordinator: fc.assignedStaff?.name || STAFF_OPTIONS[0].value,
+                priority: 'standard',
+                priorityReason: '',
+                status: 'new',
+                policyReference: fc.policyNumber || undefined,
+                intakeChannel: 'online',
+                postMortem: 'pending',
+                stages: createCaseStages(),
+                checklist: fc.requestedServices.map((svc, idx) => ({
+                  id: `chk-${fc.id}-${idx}`,
+                  name: svc,
+                  category: 'Requested service',
+                  quantity: 1,
+                  status: 'requested',
+                  owner: fc.assignedStaff?.name || STAFF_OPTIONS[0].value,
+                  assignedTo: fc.assignedStaff?.name || STAFF_OPTIONS[0].value,
+                  notes: 'Submitted via funeral intake form',
+                  createdAt: fc.createdAt,
+                  steps: createDefaultTaskSteps(svc),
+                  logbook: [],
+                })),
+                documents: [],
+                movements: [],
+                quotes: [],
+                payments: [],
+                contributions: [],
+                createdAt: fc.createdAt,
+                updatedAt: fc.createdAt,
+                demo: false,
+              }))
+            if (!additions.length) return current
+            const merged = { ...current, cases: [...additions, ...current.cases] }
+            stateRef.current = merged
+            saveOperationsState(merged)
+            return merged
+          })
+        }).catch(() => {})
       })
       .catch((err) => {
         console.warn('API operations state load (using cached data):', err)
@@ -1904,7 +1960,7 @@ function PolicyWorkspace({ policies, onCreate, onChange }: { policies: PolicyApp
         <label className="field"><span className="field__label">Customer name</span><input className="input" name="customerName" required /></label>
         <label className="field"><span className="field__label">Phone</span><input className="input" name="phone" type="tel" required /></label>
         <label className="field"><span className="field__label">Product / plan label</span><input className="input" name="product" required /></label>
-        <label className="field"><span className="field__label">Responsible staff</span><input className="input" name="responsibleStaff" required /></label>
+        <label className="field"><span className="field__label">Responsible staff</span><select className="select" name="responsibleStaff" required defaultValue="">{<option value="" disabled>Select Fidelity staff member</option>}{STAFF_OPTIONS.map((staff) => <option key={staff.value} value={staff.value}>{staff.label}</option>)}</select></label>
         <label className="field operations__form-wide"><span className="field__label">Covered members (comma separated)</span><input className="input" name="members" /></label>
       </div><button className="btn btn--primary" type="submit">Create sample application</button></form></details>
       {policies.length ? policies.map((policy) => <PolicyCard key={policy.id} policy={policy} onChange={onChange} />) : <EmptyState title="No policy applications" detail="Create a demo application to try the review and gated activation workflow."/>}

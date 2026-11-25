@@ -7,40 +7,24 @@ import { readSessionUser, writeSessionUser } from './session'
 import type { OtpReceipt, ProfileUpdate, SignInInput, SignUpInput, User } from './types'
 
 const MOCK_LATENCY_MS = 450
-const OTP_TTL_SECONDS = 300
 
 // The mock "server" is loaded lazily; a live build never fetches it.
 const mockServer = () => import('./mock-store')
 
 export async function requestOtp(phone: string): Promise<OtpReceipt> {
-  if (!env.useMock) return post<OtpReceipt>('/auth/otp', { phone })
-  const server = await mockServer()
-  server.requestOtp(phone)
-  return mockResponse({ expiresInSeconds: OTP_TTL_SECONDS }, MOCK_LATENCY_MS)
+  return post<OtpReceipt>('/auth/otp', { phone })
 }
 
 export async function signIn(input: SignInInput): Promise<User> {
-  if (!env.useMock) {
-    const user = await post<User>('/auth/signin', input)
-    writeSessionUser(user)
-    return user
-  }
-  const server = await mockServer()
-  const user = server.signIn(input)
+  const user = await post<User>('/auth/signin', input)
   writeSessionUser(user)
-  return mockResponse(user, MOCK_LATENCY_MS)
+  return user
 }
 
 export async function signUp(input: SignUpInput): Promise<User> {
-  if (!env.useMock) {
-    const user = await post<User>('/auth/signup', input)
-    writeSessionUser(user)
-    return user
-  }
-  const server = await mockServer()
-  const user = server.signUp(input)
+  const user = await post<User>('/auth/signup', input)
   writeSessionUser(user)
-  return mockResponse(user, MOCK_LATENCY_MS)
+  return user
 }
 
 export async function signOut(): Promise<void> {
