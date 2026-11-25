@@ -52,6 +52,12 @@ export function ShareActions({ name, url }: ShareActionsProps) {
           <Icon name="chat" size={16} />
           WhatsApp
         </a>
+        <a
+          className="btn btn--outline btn--sm"
+          href={`mailto:?subject=${encodeURIComponent(`In loving memory of ${name}`)}&body=${encodeURIComponent(text)}`}
+        >
+          Email
+        </a>
         <button type="button" className="btn btn--outline btn--sm" onClick={() => void copy()}>
           <Icon name="file" size={16} />
           Copy link

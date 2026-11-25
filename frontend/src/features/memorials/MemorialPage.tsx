@@ -4,6 +4,8 @@ import { Callout } from '@/components/ui/Callout'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { QueryState } from '@/components/ui/QueryState'
 import { paths, contributePath } from '@/config/routes'
+import { ShareLinkBox } from '@/features/chema-wallet/ChemaUI'
+import { ShareActions } from './ShareActions'
 import { site } from '@/config/site'
 import { ApiError } from '@/lib/api-error'
 import { formatDay } from '@/lib/format'
@@ -85,6 +87,9 @@ function MemorialView({ memorial }: { memorial: Memorial }) {
             {memorial.location && <> · {memorial.location}</>}
           </p>
           {memorial.tagline && <p className="memorial-hero__tagline">“{memorial.tagline}”</p>}
+          <div style={{ marginTop: '1rem' }}>
+            <ShareActions name={memorial.name} url={url} />
+          </div>
         </div>
       </header>
 
@@ -99,6 +104,10 @@ function MemorialView({ memorial }: { memorial: Memorial }) {
               <p className="muted">You can send a community contribution for this funeral through Chema Wallet. Payments on this page are simulated for demonstration only and are separate from Fidelity policy benefits and claims.</p>
               <div>
                 <Link className="btn btn--primary" to={contributePath(chemaCase.contributionToken)}>Send Chema</Link>
+              </div>
+              <div style={{ marginTop: '0.75rem' }}>
+                <p className="eyebrow" style={{ marginBottom: '0.35rem' }}>Share Chema contribution link</p>
+                <ShareLinkBox url={`${window.location.origin}${contributePath(chemaCase.contributionToken)}`} compact />
               </div>
             </section>
           )

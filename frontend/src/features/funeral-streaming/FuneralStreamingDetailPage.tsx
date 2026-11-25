@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Callout } from '@/components/ui/Callout'
+import { PublicShareBar } from '@/components/ui/PublicShareBar'
 import { Icon } from '@/components/ui/Icon'
 import { StatusChip } from '@/components/ui/StatusChip'
 import { funeralRecordPath, paths } from '@/config/routes'
@@ -127,6 +128,12 @@ export default function FuneralStreamingDetailPage() {
             ● Logged-in VOD Access Active
           </span>
         </div>
+        <PublicShareBar
+          url={window.location.href}
+          title={`Share funeral coverage for ${stream.personName}`}
+          message={`Join or watch the funeral service coverage for ${stream.personName}:`}
+          compact
+        />
       </header>
 
       {msg && <Callout tone="success">{msg}</Callout>}

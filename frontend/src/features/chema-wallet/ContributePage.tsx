@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import { Callout } from '@/components/ui/Callout'
 import { Icon } from '@/components/ui/Icon'
 import { StatusChip } from '@/components/ui/StatusChip'
-import { paths } from '@/config/routes'
+import { PublicShareBar } from '@/components/ui/PublicShareBar'
+import { memorialPath, paths } from '@/config/routes'
 import {
   caseProgress,
   contributionTotals,
@@ -348,6 +349,20 @@ export default function ContributePage() {
                   <div><p className="cw-eyebrow">Messages of support</p><h2 id="cw-tributes-title">In Loving Memory</h2></div>
                   <StatusChip tone="info">{tributes.length} published</StatusChip>
                 </div>
+                {item.memorialSlug && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                      <span className="cw-eyebrow">Share In Loving Memory page</span>
+                      <Link className="btn btn--outline btn--sm" to={memorialPath(item.memorialSlug)}>View memorial →</Link>
+                    </div>
+                    <PublicShareBar
+                      url={`${window.location.origin}${memorialPath(item.memorialSlug)}`}
+                      title={`Share In Loving Memory of ${item.deceasedName}`}
+                      message={`In loving memory of ${item.deceasedName}. Leave a flower, light a candle, or share a tribute:`}
+                      compact
+                    />
+                  </div>
+                )}
                 {recentTributes.length === 0 ? (
                   <p className="cw-public__empty">The family has not published any in loving memory messages yet. Messages are reviewed before they appear here.</p>
                 ) : (

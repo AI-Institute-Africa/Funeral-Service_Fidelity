@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { Callout } from '@/components/ui/Callout'
+import { PublicShareBar } from '@/components/ui/PublicShareBar'
 import { StatusChip } from '@/components/ui/StatusChip'
 import { TextField } from '@/components/ui/TextField'
 import { sendAlerts, type PlanInput } from '@/features/alerts'
@@ -117,6 +118,12 @@ function DayCard({ day }: { day: FuneralDay }) {
         {status}
       </div>
 
+      <PublicShareBar
+        url={window.location.href}
+        title={`Share funeral day programme for ${day.person}`}
+        message={`Funeral day programme and directions for ${day.person}:`}
+        compact
+      />
       <h3 style={{ margin: 0 }}>Programme and directions</h3>
       <ol className="pr-stops">
         {day.stops.map((s) => (
