@@ -112,7 +112,11 @@ export default function DashboardPage() {
         </div>
 
         <div className="dashboard__side">
-          <div className="reveal" style={{ '--i': 3 } as React.CSSProperties}>`r`n            <ChemaWalletAccountCard phone={user?.phone} />`r`n          </div>`r`n          <div className="reveal" style={{ '--i': 6 } as React.CSSProperties}>`r`n            <NextActions hasPolicy={Boolean(policy)} />
+          <div className="reveal" style={{ '--i': 3 } as React.CSSProperties}>
+            <ChemaWalletAccountCard phone={user?.phone} />
+          </div>
+          <div className="reveal" style={{ '--i': 6 } as React.CSSProperties}>
+            <NextActions hasPolicy={Boolean(policy)} />
           </div>
           <div className="reveal" style={{ '--i': 6 } as React.CSSProperties}>
             <MemorialsSummaryCard />
