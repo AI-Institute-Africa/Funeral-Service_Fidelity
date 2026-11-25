@@ -1,6 +1,6 @@
 // How a request moves once an administrator and a provider get involved. Pure: shared by the browser mock and
 // scripts/mock-api.mjs. Only relative `.ts` imports (Node loads this file directly).
-import type { AssignmentStatus, AssistanceRequest, RequestAssignment, RequestStatus } from './data.ts'
+import type { AssignmentStatus, AssistanceRequest, RequestAssignment, RequestStatus, StatusHistoryEntry } from './data.ts'
 
 /** The progress a family sees, derived from what the provider has done. */
 export function statusForAssignment(status: AssignmentStatus): RequestStatus {
@@ -33,6 +33,17 @@ export type FlowResult = { ok: true; request: AssistanceRequest } | { ok: false;
 
 const iso = (time: number) => new Date(time).toISOString()
 
+function withHistory(
+  request: AssistanceRequest,
+  status: RequestStatus,
+  label: string,
+  at: string,
+  note?: string,
+): StatusHistoryEntry[] {
+  const entry: StatusHistoryEntry = { status, label, at, ...(note ? { note } : {}) }
+  return [...(request.statusHistory ?? []), entry]
+}
+
 /** Hands a request to a provider (or to a different one). A finished request can't be reassigned. */
 export function assignRequest(
   request: AssistanceRequest,
@@ -41,16 +52,24 @@ export function assignRequest(
   now: number,
 ): FlowResult {
   if (request.status === 'complete') return { ok: false, code: 'already_complete' }
+  const at = iso(now)
   const assignment: RequestAssignment = {
     providerId: provider.id,
     providerName: provider.name,
     status: 'assigned',
-    assignedAt: iso(now),
+    assignedAt: at,
     ...(note?.trim() && { note: note.trim() }),
   }
+  const nextStatus = statusForAssignment('assigned')
   return {
     ok: true,
-    request: { ...request, status: statusForAssignment('assigned'), assignedTo: provider.name, assignment },
+    request: {
+      ...request,
+      status: nextStatus,
+      assignedTo: provider.name,
+      assignment,
+      statusHistory: withHistory(request, nextStatus, 'Adviser assigned', at, `Assigned to ${provider.name}`),
+    },
   }
 }
 
@@ -69,14 +88,23 @@ export function respondToAssignment(
 ): FlowResult {
   const assignment = request.assignment
   if (!assignment || !ALLOWED[assignment.status].includes(response)) return { ok: false, code: 'invalid_transition' }
+  const at = iso(now)
+  const nextStatus = statusForAssignment(response)
+  const historyMeta: Record<Exclude<AssignmentStatus, 'assigned'>, { label: string; note: string }> = {
+    accepted: { label: 'In progress', note: `${assignment.providerName} accepted and started work` },
+    declined: { label: 'Received', note: `${assignment.providerName} declined; awaiting reassignment` },
+    completed: { label: 'Complete', note: `Completed by ${assignment.providerName}` },
+  }
+  const meta = historyMeta[response]
   return {
     ok: true,
     request: {
       ...request,
-      status: statusForAssignment(response),
+      status: nextStatus,
       // A declined request is nobody's again, so the family isn't told someone is looking after it.
       assignedTo: response === 'declined' ? undefined : request.assignedTo,
-      assignment: { ...assignment, status: response, respondedAt: iso(now) },
+      assignment: { ...assignment, status: response, respondedAt: at },
+      statusHistory: withHistory(request, nextStatus, meta.label, at, meta.note),
     },
   }
 }
@@ -84,13 +112,16 @@ export function respondToAssignment(
 /** An administrator closes a request directly (for example one the family resolved by phone). */
 export function completeRequest(request: AssistanceRequest, now: number): FlowResult {
   if (request.status === 'complete') return { ok: false, code: 'already_complete' }
+  const at = iso(now)
   const assignment = request.assignment
+  const note = request.assignedTo ? `Marked complete (${request.assignedTo})` : 'Marked complete by Fidelity Life Assurance'
   return {
     ok: true,
     request: {
       ...request,
       status: 'complete',
-      ...(assignment && { assignment: { ...assignment, status: 'completed' as const, respondedAt: iso(now) } }),
+      ...(assignment && { assignment: { ...assignment, status: 'completed' as const, respondedAt: at } }),
+      statusHistory: withHistory(request, 'complete', 'Complete', at, note),
     },
   }
 }

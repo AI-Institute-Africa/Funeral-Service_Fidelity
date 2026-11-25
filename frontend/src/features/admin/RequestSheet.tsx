@@ -33,11 +33,40 @@ export function RequestSheet({ request, onClose }: RequestSheetProps) {
 function RequestBody({ request }: { request: AdminRequest }) {
   const role = usePortalRole()
   const respond = useRespondToRequest()
+  const [notifyBanner, setNotifyBanner] = useState<string>()
   const status = requestStatusDisplay[request.status] ?? { tone: 'info', label: request.status || 'Received' }
   const responses = (request.actions || []).filter((action): action is 'accepted' | 'declined' | 'completed' => action !== 'assign')
   const assignmentStatus = request.assignment
     ? (assignmentDisplay[request.assignment.status] ?? { tone: 'info', label: request.assignment.status })
     : null
+
+  const handleAction = (action: 'accepted' | 'declined' | 'completed') => {
+    const statusMessages: Record<'accepted' | 'declined' | 'completed', string> = {
+      accepted: `Update on ${request.reference}: Your request is now In Progress. ${request.assignment?.providerName ?? 'Our team'} has accepted your request and is working on it.`,
+      completed: `Update on ${request.reference}: Your request is now Complete. Thank you for trusting Fidelity Life Assurance.`,
+      declined: `Update on ${request.reference}: Your request is being reassigned to another Fidelity adviser.`,
+    }
+    respond.mutate(
+      { id: request.id, status: action },
+      {
+        onSuccess: () => {
+          setNotifyBanner(`Customer notified via WhatsApp, SMS & Email (${requestActionLabel[action]}).`)
+          void fetch('/api/whatsapp/notify-assistance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reference: request.reference,
+              customerName: request.customer?.name,
+              customerPhone: request.customer?.phone,
+              kindLabel: requestKindLabel[request.kind] ?? 'Assistance Request',
+              contactPreference: request.contactPreference,
+              message: statusMessages[action],
+            }),
+          }).catch(() => {})
+        },
+      },
+    )
+  }
 
   return (
     <>
@@ -126,6 +155,12 @@ function RequestBody({ request }: { request: AdminRequest }) {
         </Callout>
       )}
 
+      {notifyBanner && (
+        <Callout tone="success" role="status">
+          {notifyBanner}
+        </Callout>
+      )}
+
       {responses.length > 0 && (
         <section className="sheet-section" aria-labelledby="actions-title">
           <h3 id="actions-title">{role === 'admin' ? 'Or close it' : 'Your answer'}</h3>
@@ -138,7 +173,7 @@ function RequestBody({ request }: { request: AdminRequest }) {
                   action === 'declined' ? 'btn--outline' : action === 'completed' && role === 'admin' ? 'btn--outline' : 'btn--primary'
                 }`}
                 disabled={respond.isPending}
-                onClick={() => respond.mutate({ id: request.id, status: action })}
+                onClick={() => handleAction(action)}
               >
                 {action === 'accepted' && <Icon name="check" size={16} />}
                 {requestActionLabel[action]}
@@ -164,6 +199,7 @@ function AssignForm({ request }: { request: AdminRequest }) {
   const [staffId, setStaffId] = useState('')
   const [note, setNote] = useState('')
   const [problem, setProblem] = useState<string>()
+  const [assignedNotice, setAssignedNotice] = useState<string>()
 
   const reassign = Boolean(request.assignment) && request.assignment?.status !== 'declined'
 
@@ -175,20 +211,29 @@ function AssignForm({ request }: { request: AdminRequest }) {
     }
     setProblem(undefined)
     const chosenStaff = FIDELITY_STAFF_MEMBERS.find((s) => s.id === staffId)
-    assign.mutate({ id: request.id, providerId: staffId, note: note.trim() || undefined })
-    if (chosenStaff) {
-      void fetch('/api/whatsapp/notify-assignment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          caseReference: request.reference,
-          coordinatorName: chosenStaff.name,
-          customerName: request.customer?.name,
-          customerPhone: request.customer?.phone,
-          notes: note.trim() || undefined,
-        }),
-      }).catch(() => {})
-    }
+    assign.mutate(
+      { id: request.id, providerId: staffId, note: note.trim() || undefined },
+      {
+        onSuccess: () => {
+          if (chosenStaff) {
+            setAssignedNotice(`${chosenStaff.name} assigned — customer notified via WhatsApp, SMS & Email.`)
+            void fetch('/api/whatsapp/notify-assignment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                caseReference: request.reference,
+                coordinatorName: chosenStaff.name,
+                coordinatorPhone: chosenStaff.phone,
+                customerName: request.customer?.name,
+                customerPhone: request.customer?.phone,
+                contactPreference: request.contactPreference,
+                notes: note.trim() || undefined,
+              }),
+            }).catch(() => {})
+          }
+        },
+      },
+    )
   }
 
   return (
@@ -247,6 +292,12 @@ function AssignForm({ request }: { request: AdminRequest }) {
       {assign.error && (
         <Callout tone="danger" role="alert">
           {getErrorMessage(assign.error)}
+        </Callout>
+      )}
+
+      {assignedNotice && (
+        <Callout tone="success" role="status">
+          {assignedNotice}
         </Callout>
       )}
 

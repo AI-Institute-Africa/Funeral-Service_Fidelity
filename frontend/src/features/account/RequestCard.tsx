@@ -1,7 +1,14 @@
 import { Icon, type IconName } from '@/components/ui/Icon'
 import { StatusChip, type StatusTone } from '@/components/ui/StatusChip'
-import { formatRelativeDays } from '@/lib/format'
-import { requestKindLabel, REQUEST_STEPS, type AssistanceRequest, type RequestKind, type RequestStatus } from './data'
+import { formatRelativeDays, formatServiceTime } from '@/lib/format'
+import {
+  requestKindLabel,
+  REQUEST_STEPS,
+  type AssistanceRequest,
+  type RequestKind,
+  type RequestStatus,
+  type StatusHistoryEntry,
+} from './data'
 
 const kindIcon: Record<RequestKind, IconName> = { bereavement: 'heart', claim: 'file', general: 'chat' }
 
@@ -14,6 +21,46 @@ const statusTone: Record<RequestStatus, StatusTone> = {
 
 const statusLabel = (status: RequestStatus) => REQUEST_STEPS.find((step) => step.value === status)?.label ?? status
 
+function buildHistory(request: AssistanceRequest): StatusHistoryEntry[] {
+  if (request.statusHistory && request.statusHistory.length > 0) {
+    return request.statusHistory
+  }
+  const entries: StatusHistoryEntry[] = [
+    { status: 'received', label: 'Received', at: request.createdAt, note: 'Request submitted' },
+  ]
+  if (request.assignment) {
+    entries.push({
+      status: 'assigned',
+      label: 'Adviser assigned',
+      at: request.assignment.assignedAt || request.createdAt,
+      note: `Assigned to ${request.assignment.providerName}`,
+    })
+    if (request.assignment.status === 'accepted' && request.assignment.respondedAt) {
+      entries.push({
+        status: 'in_progress',
+        label: 'In progress',
+        at: request.assignment.respondedAt,
+        note: `${request.assignment.providerName} accepted and started work`,
+      })
+    } else if (request.assignment.status === 'completed' && request.assignment.respondedAt) {
+      entries.push({
+        status: 'complete',
+        label: 'Complete',
+        at: request.assignment.respondedAt,
+        note: `Completed by ${request.assignment.providerName}`,
+      })
+    } else if (request.assignment.status === 'declined' && request.assignment.respondedAt) {
+      entries.push({
+        status: 'received',
+        label: 'Received',
+        at: request.assignment.respondedAt,
+        note: `${request.assignment.providerName} declined; awaiting reassignment`,
+      })
+    }
+  }
+  return entries
+}
+
 type RequestCardProps = {
   request: AssistanceRequest
   /** Dashboard variant: no message, no stepper labels. */
@@ -22,6 +69,7 @@ type RequestCardProps = {
 
 export function RequestCard({ request, compact = false }: RequestCardProps) {
   const currentIndex = REQUEST_STEPS.findIndex((step) => step.value === request.status)
+  const history = compact ? [] : buildHistory(request)
 
   return (
     <article className={`request-card${compact ? ' request-card--compact' : ''}`}>
@@ -60,6 +108,25 @@ export function RequestCard({ request, compact = false }: RequestCardProps) {
             <p className="request-card__adviser">
               <Icon name="user" size={16} /> {request.assignedTo} is looking after this for you.
             </p>
+          )}
+          {history.length > 0 && (
+            <div className="request-card__history" aria-label="Activity log">
+              <p className="request-card__history-title">Progress &amp; notification log</p>
+              <ul className="request-card__history-list">
+                {history.map((entry, idx) => (
+                  <li key={`${entry.status}-${entry.at}-${idx}`} className="request-card__history-item">
+                    <span className="request-card__history-dot" aria-hidden="true">
+                      {idx < history.length - 1 || entry.status === 'complete' ? '✓' : '●'}
+                    </span>
+                    <div className="request-card__history-body">
+                      <strong>{entry.label}</strong>
+                      <span className="muted"> — {formatServiceTime(entry.at)}</span>
+                      {entry.note && <span className="request-card__history-note"> ({entry.note})</span>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </>
       )}

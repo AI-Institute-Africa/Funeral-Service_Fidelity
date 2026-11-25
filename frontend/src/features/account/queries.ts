@@ -14,6 +14,7 @@ const policyQuery = queryOptions({
 const requestsQuery = queryOptions({
   queryKey: requestsKey,
   queryFn: ({ signal }) => listRequests(signal),
+  refetchInterval: 5000,
 })
 
 export const usePolicy = () => useQuery(policyQuery)

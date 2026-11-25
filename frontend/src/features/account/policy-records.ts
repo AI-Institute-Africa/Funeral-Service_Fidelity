@@ -234,7 +234,20 @@ export function seedRequests(now: Date = new Date()): Record<string, AssistanceR
           assignedAt: new Date(createdAt + HOUR_MS).toISOString(),
           ...(row.assignment.status !== 'assigned' && { respondedAt: new Date(createdAt + 3 * HOUR_MS).toISOString() }),
         }
-        return { ...row, createdAt: new Date(createdAt).toISOString(), ...(assignment && { assignment }) }
+        const createdIso = new Date(createdAt).toISOString()
+        const statusHistory: AssistanceRequest['statusHistory'] = [{ status: 'received', label: 'Received', at: createdIso, note: 'Request submitted' }]
+        if (assignment) {
+          statusHistory.push({ status: 'assigned', label: 'Adviser assigned', at: assignment.assignedAt, note: `Assigned to ${assignment.providerName}` })
+          if (assignment.status === 'accepted' && assignment.respondedAt) {
+            statusHistory.push({ status: 'in_progress', label: 'In progress', at: assignment.respondedAt, note: `${assignment.providerName} accepted and started work` })
+          } else if (assignment.status === 'completed' && assignment.respondedAt) {
+            statusHistory.push({ status: 'in_progress', label: 'In progress', at: new Date(createdAt + 2 * HOUR_MS).toISOString(), note: `${assignment.providerName} started work` })
+            statusHistory.push({ status: 'complete', label: 'Complete', at: assignment.respondedAt, note: `Completed by ${assignment.providerName}` })
+          } else if (assignment.status === 'declined' && assignment.respondedAt) {
+            statusHistory.push({ status: 'received', label: 'Received', at: assignment.respondedAt, note: `${assignment.providerName} declined; awaiting reassignment` })
+          }
+        }
+        return { ...row, createdAt: createdIso, ...(assignment && { assignment }), statusHistory }
       }),
     ]),
   )

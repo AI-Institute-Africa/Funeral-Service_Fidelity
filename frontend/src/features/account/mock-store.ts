@@ -1,7 +1,7 @@
 import { notifyRequest } from '@/features/alerts/mock-triggers'
 import { ApiError } from '@/lib/api-error'
 import type { AssistanceRequest, NewRequest, Policy } from './data'
-import { MESSAGE_MAX_LENGTH, REQUEST_KINDS } from './data'
+import { MESSAGE_MAX_LENGTH, REQUEST_KINDS, REQUEST_STEPS } from './data'
 import { demoPolicyLinks, findPolicyByNumber, findPolicyRecord, seedRequests } from './policy-records'
 
 // The "server" behind account endpoints in mock mode. Per-user links and requests persist in localStorage.
@@ -77,6 +77,7 @@ export function createRequest(userId: string, input: NewRequest): AssistanceRequ
   if (Object.keys(errors).length) throw new ApiError(422, 'validation_failed', 'The request is invalid', errors)
 
   const reference = `AR-${Math.floor(1100 + Math.random() * 8900)}`
+  const createdAt = new Date().toISOString()
   const request: AssistanceRequest = {
     id: reference.toLowerCase(),
     reference,
@@ -84,7 +85,8 @@ export function createRequest(userId: string, input: NewRequest): AssistanceRequ
     message,
     contactPreference: input.contactPreference,
     status: 'received',
-    createdAt: new Date().toISOString(),
+    createdAt,
+    statusHistory: [{ status: 'received', label: 'Received', at: createdAt, note: 'Request submitted' }],
   }
 
   const all = readStore()
@@ -102,8 +104,27 @@ export const listAllRequests = (): OwnedRequest[] =>
 
 export function saveRequest(userId: string, request: AssistanceRequest): void {
   const all = readStore()
+  const existing = (all[userId] ?? []).find((candidate) => candidate.id === request.id)
+  let updated = request
+  if (
+    existing &&
+    existing.status !== request.status &&
+    (request.statusHistory?.length ?? 0) <= (existing.statusHistory?.length ?? 0)
+  ) {
+    const label = REQUEST_STEPS.find((step) => step.value === request.status)?.label ?? request.status
+    updated = {
+      ...request,
+      statusHistory: [
+        ...(existing.statusHistory ?? []),
+        { status: request.status, label, at: new Date().toISOString(), ...(request.assignedTo ? { note: request.assignedTo } : {}) },
+      ],
+    }
+  }
   writeJson(REQUESTS_KEY, {
     ...all,
-    [userId]: (all[userId] ?? []).map((candidate) => (candidate.id === request.id ? request : candidate)),
+    [userId]: (all[userId] ?? []).map((candidate) => (candidate.id === request.id ? updated : candidate)),
   })
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('fidelity:requests-updated', { detail: { userId, request: updated } }))
+  }
 }

@@ -54,6 +54,14 @@ export type RequestAssignment = {
   note?: string
 }
 
+export type StatusHistoryEntry = {
+  status: RequestStatus
+  label: string
+  at: string
+  /** Provider or staff name, if applicable. */
+  note?: string
+}
+
 export type AssistanceRequest = {
   id: string
   /** Human-readable reference a family can quote when they phone. */
@@ -67,6 +75,8 @@ export type AssistanceRequest = {
   /** Name of whoever is handling it, once assigned (the provider's name, for display). */
   assignedTo?: string
   assignment?: RequestAssignment
+  /** Timestamped log of every status transition — newest last. */
+  statusHistory?: StatusHistoryEntry[]
 }
 
 export type NewRequest = {
