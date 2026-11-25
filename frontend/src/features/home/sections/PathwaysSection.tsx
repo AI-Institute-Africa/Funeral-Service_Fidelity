@@ -16,7 +16,7 @@ const featured: Pathway = {
 }
 
 const pathways: Pathway[] = [
-  { icon: 'file', title: 'Plan ahead', description: 'Compare plans and get a quote for your family.', to: anchor('plans'), cta: 'See plans' },
+  { icon: 'file', title: 'Plan ahead', description: 'Compare funeral plans and get a quote for your family.', to: anchor('plans'), cta: 'See funeral plans' },
   { icon: 'flower', title: 'Remember them', description: 'A memorial page, and help finding a cemetery or plot.', to: anchor('memorials'), cta: 'Start a memorial' },
   { icon: 'bag', title: 'Flowers and more', description: 'Wreaths, plaques, stationery and hire, delivered.', to: paths.marketplace, cta: 'Browse' },
   { icon: 'heart', title: 'After the service', description: 'Checklists and support for the weeks that follow.', to: anchor('support'), cta: 'Get support' },

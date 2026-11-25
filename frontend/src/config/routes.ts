@@ -37,6 +37,7 @@ export const paths = {
   about: '/about',
   cemeteries: '/cemeteries',
   assistant: '/support-assistant',
+  digitalServices: '/digital-services',
 } as const
 
 /** Link to a section of the home page, e.g. `anchor('plans')` -> `/#plans`. */
@@ -101,6 +102,7 @@ export const pageTitles: Record<string, string> = {
   [paths.accountProfile]: 'Profile | Fidelity Life Assurance of Zimbabwe',
   [paths.cemeteries]: 'Cemeteries & grave search | Fidelity Life Assurance of Zimbabwe',
   [paths.assistant]: 'Grief support assistant (demonstration) | Fidelity Life Assurance of Zimbabwe',
+  [paths.digitalServices]: 'Digital Services | Fidelity Life Assurance of Zimbabwe',
   [paths.marketplace]: 'Marketplace | Fidelity Life Assurance of Zimbabwe',
   [paths.checkout]: 'Checkout | Fidelity Life Assurance of Zimbabwe',
 }

@@ -28,6 +28,53 @@ export function OtpVerify({ phone, onSubmit, onResend, onBack, isSubmitting, err
     return () => window.clearTimeout(timer)
   }, [secondsLeft])
 
+  // Auto-populate OTP when received via SMS (Web OTP API) or copied from WhatsApp on the same device.
+  useEffect(() => {
+    if (isSubmitting) return
+    const controller = new AbortController()
+
+    if ('OTPCredential' in window && navigator.credentials?.get) {
+      ;(navigator.credentials.get as (options: unknown) => Promise<{ code?: string } | null>)({
+        otp: { transport: ['sms'] },
+        signal: controller.signal,
+      })
+        .then((otp) => {
+          const received = otp?.code?.replace(/\D/g, '').slice(0, 6)
+          if (received && received.length === 6) {
+            setCode(received)
+            onSubmit(received)
+          }
+        })
+        .catch(() => {})
+    }
+
+    const tryClipboardOtp = async () => {
+      try {
+        if (!navigator.clipboard?.readText) return
+        const text = await navigator.clipboard.readText()
+        const match = text.match(/\b(\d{6})\b/)
+        if (match?.[1] && !code) {
+          setCode(match[1])
+          onSubmit(match[1])
+        }
+      } catch {
+        // Clipboard permission not granted; ignore silently
+      }
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void tryClipboardOtp()
+    }
+    window.addEventListener('focus', tryClipboardOtp)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      controller.abort()
+      window.removeEventListener('focus', tryClipboardOtp)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [isSubmitting, onSubmit, code])
+
   // A wrong code clears the boxes so the next attempt starts fresh.
   const [seenError, setSeenError] = useState(error)
   if (error !== seenError) {
@@ -45,7 +92,7 @@ export function OtpVerify({ phone, onSubmit, onResend, onBack, isSubmitting, err
     <div className="auth-step">
       <h1 className="auth-step__title">Enter your code</h1>
       <p className="muted">
-        We sent a 6-digit code via WhatsApp to <strong>{formatPhone(phone)}</strong>.
+        We sent a 6-digit code via WhatsApp &amp; SMS to <strong>{formatPhone(phone)}</strong>. If received on this device, it will auto-fill.
       </p>
 
       <OtpInput value={code} onChange={setCode} onComplete={onSubmit} disabled={isSubmitting} invalid={Boolean(error)} />

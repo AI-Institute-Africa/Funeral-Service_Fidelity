@@ -80,7 +80,7 @@ export function RequestForm({ initialKind = 'general', onClose }: RequestFormPro
         </span>
         <h2 className="panel__title">We’ve received your request</h2>
         <p>
-          Your reference is <strong>{create.data.reference}</strong>.
+          Your reference is <strong>{create.data.reference}</strong>. Your request has been submitted successfully — please check your phone and WhatsApp for further actions.
         </p>
 
         <div

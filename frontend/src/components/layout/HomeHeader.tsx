@@ -5,7 +5,6 @@ import { anchor, paths } from '@/config/routes'
 import { primaryNav } from '@/config/site'
 import { useAuth } from '@/features/auth'
 import { CartButton } from '@/features/marketplace'
-import { KuwanaBadge } from '@/features/account/KuwanaBadge'
 import { Brand } from './Brand'
 
 export function HomeHeader() {
@@ -135,7 +134,6 @@ export function HomeHeader() {
         </nav>
 
         <div className="site-header__cart">
-          <KuwanaBadge />
           <CartButton />
         </div>
 

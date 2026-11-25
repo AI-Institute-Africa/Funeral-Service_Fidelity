@@ -27,7 +27,8 @@ export const contact = {
 
 export const primaryNav: NavLink[] = [
   { label: 'Services', to: anchor('services') },
-  { label: 'Plans', to: anchor('plans') },
+  { label: 'Funeral Plans', to: anchor('plans') },
+  { label: 'Digital Services', to: paths.digitalServices },
   { label: 'Marketplace', to: paths.marketplace },
   { label: 'Memorials', to: anchor('memorials') },
 ]
@@ -83,7 +84,8 @@ export const footerColumns: { title: string; links: NavLink[] }[] = [
     title: 'Explore',
     links: [
       { label: 'Services', to: anchor('services') },
-      { label: 'Plans', to: anchor('plans') },
+      { label: 'Funeral Plans', to: anchor('plans') },
+      { label: 'Digital Services', to: paths.digitalServices },
       { label: 'Remembrance', to: anchor('memorials') },
       { label: 'Cemeteries & grave search', to: paths.cemeteries },
       { label: 'Grief support assistant', to: paths.assistant },

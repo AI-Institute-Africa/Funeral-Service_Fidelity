@@ -558,12 +558,42 @@ export const QUOTE_STATUSES: { value: QuoteStatus; label: string }[] = [
   { value: 'reconciled', label: 'Reconciled' },
 ]
 
+export const STAFF_DIRECTORY: Record<string, { name: string; role: string; phone: string }> = {
+  'Nomsa Ndlovu': { name: 'Nomsa Ndlovu', role: 'Head of Funeral Operations', phone: '+263 773 000 333' },
+  'Tariro Chikwanha': { name: 'Tariro Chikwanha', role: 'Senior Case Lead', phone: '+263 790 499 962' },
+  'Farai Gumbo': { name: 'Farai Gumbo', role: 'Mortuary & Logistics Lead', phone: '+263 772 555 666' },
+  'Blessing Moyo': { name: 'Blessing Moyo', role: 'Transport & Fleet', phone: '+263 771 888 999' },
+  'Chipo Dube': { name: 'Chipo Dube', role: 'Chapel & Ceremonies', phone: '+263 773 000 222' },
+  'Operations Team': { name: 'Operations Team', role: 'Harare Desk', phone: '+263 790 499 962' },
+}
+
+export const DEFAULT_STAGE_STAFF: string[] = [
+  'Farai Gumbo',
+  'Nomsa Ndlovu',
+  'Farai Gumbo',
+  'Blessing Moyo',
+  'Farai Gumbo',
+  'Nomsa Ndlovu',
+  'Farai Gumbo',
+  'Blessing Moyo',
+  'Chipo Dube',
+  '',
+  'Tariro Chikwanha',
+]
+
+export function getStaffContact(name?: string | null): { name: string; role: string; phone: string } | null {
+  if (!name) return null
+  const found = STAFF_DIRECTORY[name.trim()]
+  if (found) return found
+  return { name: name.trim(), role: 'Fidelity Coordinator', phone: '+263 790 499 962' }
+}
+
 export function createCaseStages(): CaseStage[] {
   return STAGE_TEMPLATES.map((label, index) => ({
     id: `stage-${index + 1}`,
     label,
     status: 'not-started',
-    assignedTo: '',
+    assignedTo: DEFAULT_STAGE_STAFF[index] ?? '',
     notes: '',
     blocker: '',
     steps: createDefaultTaskSteps(label),

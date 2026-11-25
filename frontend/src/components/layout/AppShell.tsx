@@ -7,7 +7,6 @@ import { paths } from '@/config/routes'
 import type { AccountNavItem } from '@/config/site'
 import { useAuth, useSignOutAndLeave } from '@/features/auth'
 import { CartButton } from '@/features/marketplace'
-import { KuwanaBadge } from '@/features/account/KuwanaBadge'
 import { ErrorBoundary } from '@/app/ErrorBoundary'
 import { Brand } from './Brand'
 import './account-layout.css'
@@ -53,7 +52,6 @@ export function AppShell({ brandTo, subtitle, navLabel, nav, aside, showCart = f
           <Brand to={brandTo} subtitle={subtitle} />
 
           <div className="site-header__actions">
-            <KuwanaBadge />
             {showCart && <CartButton />}
             <Link className="btn btn--outline btn--sm account-header__site" to={paths.home}>
               Back to website

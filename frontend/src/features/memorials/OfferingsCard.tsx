@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Callout } from '@/components/ui/Callout'
 import { Icon, type IconName } from '@/components/ui/Icon'
-import { productPath } from '@/config/routes'
+import { paths, productPath } from '@/config/routes'
 import { getErrorMessage } from '@/lib/api-error'
 import type { Memorial, OfferingKind } from './data'
 import { useOffering } from './queries'
@@ -100,6 +100,10 @@ export function OfferingsCard({ memorial }: { memorial: Memorial }) {
       )}
 
       <p className="offerings__real">
+        <Link className="btn btn--primary btn--sm" to={`${paths.cemeteries}?grave=${encodeURIComponent(memorial.name)}`} style={{ marginBottom: '0.5rem', display: 'inline-block' }}>
+          🌸🕯️ Place Flower or Candle on Grave (Google Maps)
+        </Link>
+        <br />
         Want to do more?{' '}
         <Link to={productPath('wreath-package', memorial.name)}>Send flowers to the family</Link> or{' '}
         <Link to={productPath('granite-plaque', memorial.name)}>order a remembrance plaque</Link>.

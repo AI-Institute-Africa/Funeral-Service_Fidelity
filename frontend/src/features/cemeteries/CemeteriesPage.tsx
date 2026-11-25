@@ -1,4 +1,6 @@
-import { useId, useState, useEffect, type FormEvent } from 'react'
+import { useId, useState, useEffect, useRef, type DragEvent, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '@/features/auth'
 import { Callout } from '@/components/ui/Callout'
 import { Section } from '@/components/ui/Section'
 import { SectionHead } from '@/components/ui/SectionHead'
@@ -20,7 +22,7 @@ import {
   type FlowerTribute,
 } from './data'
 import { plotEnquiryStore, flowerTributeStore } from './store'
-import { useKuwanaTokens, TOKEN_COSTS } from '@/features/account/tokens'
+
 import './cemeteries.css'
 
 const tone = { available: 'success', limited: 'warning', full: 'neutral' } as const
@@ -239,7 +241,7 @@ function GraveResult({
           }}
           onClick={() => onAddFlowers(g)}
         >
-          💐 Leave Virtual Flowers (10 Tokens)
+          💐 Leave Flowers or Candle on Grave
         </button>
         {c && (
           <a
@@ -256,23 +258,281 @@ function GraveResult({
   )
 }
 
+function GraveSiteMapModal({
+  grave,
+  defaultName,
+  onClose,
+  onOpenForm,
+}: {
+  grave: GraveRecord
+  defaultName: string
+  onClose: () => void
+  onOpenForm: (grave: GraveRecord) => void
+}) {
+  const mapBoxRef = useRef<HTMLDivElement>(null)
+  const [visitorName, setVisitorName] = useState(defaultName)
+  const [visitorMsg, setVisitorMsg] = useState('')
+  const [draggingKind, setDraggingKind] = useState<'flower' | 'candle' | null>(null)
+  const [mapNotice, setMapNotice] = useState('')
+  const [mapError, setMapError] = useState('')
+  const [tributes, setTributes] = useState<FlowerTribute[]>(() => flowerTributeStore.listByGrave(grave.id))
+
+  useEffect(() => {
+    const refresh = () => setTributes(flowerTributeStore.listByGrave(grave.id))
+    window.addEventListener('flowers-updated', refresh)
+    return () => window.removeEventListener('flowers-updated', refresh)
+  }, [grave.id])
+
+  function placeOnMap(kind: 'flower' | 'candle', xPct: number, yPct: number) {
+    setMapError('')
+    const name = visitorName.trim()
+    if (!name) {
+      setMapError('Please enter your name first so it can be recorded on the grave.')
+      return
+    }
+    flowerTributeStore.add({
+      graveId: grave.id,
+      giverName: name,
+      message: visitorMsg.trim() || (kind === 'candle' ? 'Lit a vigil candle in loving memory.' : 'Placed flowers in loving memory.'),
+      flowerType: kind === 'candle' ? 'candle' : 'white-lilies',
+      kind,
+      mapX: Math.max(8, Math.min(92, Math.round(xPct))),
+      mapY: Math.max(10, Math.min(88, Math.round(yPct))),
+    })
+    setMapNotice(`${kind === 'candle' ? '🕯️ Candle' : '🌸 Flower'} placed on the grave by ${name}!`)
+    setVisitorMsg('')
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    const kind = (e.dataTransfer.getData('text/plain') as 'flower' | 'candle') || draggingKind
+    setDraggingKind(null)
+    if (!kind || !mapBoxRef.current) return
+    const rect = mapBoxRef.current.getBoundingClientRect()
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100
+    placeOnMap(kind, xPct, yPct)
+  }
+
+  return (
+    <Modal title={`Grave Site: ${grave.fullName} (${grave.plot})`} onClose={onClose}>
+      <div className="stack" style={{ gap: '12px' }}>
+        <div
+          style={{
+            background: '#f1f5f9',
+            padding: '10px 12px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '6px',
+          }}
+        >
+          <div><strong>Section:</strong> {grave.section}</div>
+          <div><strong>Plot Number:</strong> {grave.plot}</div>
+          <div><strong>Years:</strong> {grave.birthYear} — {grave.deathYear}</div>
+          <div><strong>Status:</strong> {grave.verified ? 'Verified Marker' : 'Pending verification'}</div>
+        </div>
+
+        <p style={{ margin: 0, fontSize: '13px' }}>
+          <strong>Walking route:</strong> {grave.walkingDirections}
+        </p>
+
+        {/* Drag-and-drop Flower & Candle Bar */}
+        <div style={{ background: '#fdf2f8', border: '1px solid #fbcfe8', borderRadius: '8px', padding: '10px 12px', display: 'grid', gap: '8px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 600, color: '#9d174d' }}>
+            Drag a 🌸 Flower or 🕯️ Candle onto the grave on Google Maps below (your name is recorded)
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '8px' }}>
+            <input
+              className="input"
+              placeholder="Your name (required)"
+              value={visitorName}
+              onChange={(e) => setVisitorName(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Short tribute message (optional)"
+              value={visitorMsg}
+              onChange={(e) => setVisitorMsg(e.target.value)}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div
+              draggable
+              onDragStart={(e) => {
+                setDraggingKind('flower')
+                e.dataTransfer.setData('text/plain', 'flower')
+              }}
+              onDragEnd={() => setDraggingKind(null)}
+              style={{
+                cursor: 'grab',
+                padding: '6px 12px',
+                borderRadius: '999px',
+                background: '#ffffff',
+                border: '1px solid #f472b6',
+                fontSize: '13px',
+                fontWeight: 600,
+                userSelect: 'none',
+              }}
+              title="Drag onto the grave on the map"
+            >
+              🌸 Drag Flower
+            </div>
+            <div
+              draggable
+              onDragStart={(e) => {
+                setDraggingKind('candle')
+                e.dataTransfer.setData('text/plain', 'candle')
+              }}
+              onDragEnd={() => setDraggingKind(null)}
+              style={{
+                cursor: 'grab',
+                padding: '6px 12px',
+                borderRadius: '999px',
+                background: '#ffffff',
+                border: '1px solid #f59e0b',
+                fontSize: '13px',
+                fontWeight: 600,
+                userSelect: 'none',
+              }}
+              title="Drag onto the grave on the map"
+            >
+              🕯️ Drag Candle
+            </div>
+            <button type="button" className="btn btn--outline btn--sm" onClick={() => placeOnMap('flower', 46 + Math.random() * 8, 46 + Math.random() * 8)}>
+              + Place Flower
+            </button>
+            <button type="button" className="btn btn--outline btn--sm" onClick={() => placeOnMap('candle', 46 + Math.random() * 8, 46 + Math.random() * 8)}>
+              + Light Candle
+            </button>
+          </div>
+          {mapError && <p style={{ margin: 0, fontSize: '12px', color: '#b91c1c', fontWeight: 600 }}>{mapError}</p>}
+          {mapNotice && <p style={{ margin: 0, fontSize: '12px', color: '#047857', fontWeight: 600 }}>{mapNotice}</p>}
+        </div>
+
+        {/* Google Maps Grave View with Drop Overlay & Placed Markers */}
+        <div
+          ref={mapBoxRef}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+          style={{
+            position: 'relative',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            height: '340px',
+            border: draggingKind ? '2px dashed #db2777' : '1px solid #cbd5e1',
+          }}
+        >
+          <iframe
+            title={`Grave ${grave.fullName}`}
+            width="100%"
+            height="100%"
+            frameBorder="0"
+            style={{ border: 0, pointerEvents: draggingKind ? 'none' : 'auto' }}
+            src={googleMapsEmbedUrl(grave.lat, grave.lng)}
+            allowFullScreen
+          />
+
+          {/* Drop zone indicator while dragging */}
+          {draggingKind && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(219, 39, 119, 0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                pointerEvents: 'none',
+                fontWeight: 700,
+                color: '#9d174d',
+              }}
+            >
+              Drop {draggingKind === 'candle' ? '🕯️ Candle' : '🌸 Flower'} on the grave location
+            </div>
+          )}
+
+          {/* Placed Flowers & Candles on the Grave */}
+          {tributes.map((t, idx) => {
+            const x = t.mapX ?? (44 + ((idx * 9) % 16))
+            const y = t.mapY ?? (44 + ((idx * 7) % 16))
+            const isCandle = t.kind === 'candle' || t.flowerType === 'candle'
+            const icon = isCandle ? '🕯️' : (FLOWER_VARIETIES.find((v) => v.id === t.flowerType)?.icon || '🌸')
+            return (
+              <div
+                key={t.id}
+                style={{
+                  position: 'absolute',
+                  left: `${x}%`,
+                  top: `${y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  pointerEvents: 'none',
+                  zIndex: 5,
+                }}
+              >
+                <span style={{ fontSize: '22px', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.45))' }}>{icon}</span>
+                <span
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.85)',
+                    color: '#ffffff',
+                    fontSize: '10px',
+                    padding: '1px 6px',
+                    borderRadius: '999px',
+                    whiteSpace: 'nowrap',
+                    marginTop: '1px',
+                  }}
+                >
+                  {t.giverName}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <span style={{ fontSize: '12px', color: '#64748b' }}>
+            GPS: {grave.lat}, {grave.lng} · {tributes.length} offering(s) on this grave
+          </span>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={() => {
+              onOpenForm(grave)
+              onClose()
+            }}
+          >
+            💐 Open Full Tribute Form
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 export default function CemeteriesPage() {
+  const [searchParams] = useSearchParams()
+  const { user } = useAuth()
+  const initialGraveQuery = searchParams.get('grave') ?? ''
   const [query, setQuery] = useState('')
   const [publishedOnly, setPublishedOnly] = useState(false)
-  const [graveName, setGraveName] = useState('')
+  const [graveName, setGraveName] = useState(initialGraveQuery)
   const [graveYear, setGraveYear] = useState('')
-  const [graveResults, setGraveResults] = useState<GraveRecord[] | null>(null)
+  const [graveResults, setGraveResults] = useState<GraveRecord[] | null>(() =>
+    initialGraveQuery ? searchGraves(initialGraveQuery) : null,
+  )
   const checkId = useId()
-
-  const { balance, spend } = useKuwanaTokens()
-
-  // Modals state
   const [activeCemeteryMap, setActiveCemeteryMap] = useState<Cemetery | null>(null)
-  const [activeGraveSite, setActiveGraveSite] = useState<GraveRecord | null>(null)
+  const [activeGraveSite, setActiveGraveSite] = useState<GraveRecord | null>(() => {
+    if (!initialGraveQuery) return null
+    const matches = searchGraves(initialGraveQuery)
+    return matches[0] ?? null
+  })
   const [flowerGrave, setFlowerGrave] = useState<GraveRecord | null>(null)
-
-  // Flower Form State
-  const [giverName, setGiverName] = useState('')
+  const [giverName, setGiverName] = useState(user?.name ?? '')
   const [flowerMessage, setFlowerMessage] = useState('')
   const [flowerType, setFlowerType] = useState<FlowerTribute['flowerType']>('white-lilies')
   const [flowerError, setFlowerError] = useState('')
@@ -294,27 +554,12 @@ export default function CemeteriesPage() {
       return
     }
 
-    if (balance < TOKEN_COSTS.FLOWER_TRIBUTE) {
-      setFlowerError(`Insufficient Kuwana tokens. You need ${TOKEN_COSTS.FLOWER_TRIBUTE} tokens (current balance: ${balance}). Top up in the header.`)
-      return
-    }
-
-    const deducted = spend(
-      TOKEN_COSTS.FLOWER_TRIBUTE,
-      'flower-tribute',
-      `Virtual flower tribute for late ${flowerGrave.fullName} at plot ${flowerGrave.plot}`,
-    )
-
-    if (!deducted) {
-      setFlowerError('Could not deduct tokens. Please try again.')
-      return
-    }
-
     flowerTributeStore.add({
       graveId: flowerGrave.id,
       giverName: giverName.trim(),
       message: flowerMessage.trim(),
       flowerType,
+      kind: flowerType === 'candle' ? 'candle' : 'flower',
     })
 
     setFlowerSuccess('Your floral memorial in loving memory has been placed permanently on the grave!')
@@ -335,7 +580,7 @@ export default function CemeteriesPage() {
           title="Find a cemetery, view GPS grave sites & place floral memorials in loving memory."
         />
         <Callout tone="info">
-          <strong>Smart Cemetery & Grave Pinning:</strong> View cemetery layouts, retrieve GPS coordinates for loved ones&apos; resting places with Google Maps navigation, and place virtual floral arrangements in loving memory using Kuwana Tokens.
+          <strong>Smart Cemetery & Grave Pinning:</strong> View cemetery layouts, retrieve GPS coordinates for loved ones&apos; resting places with Google Maps navigation, and place virtual floral arrangements in loving memory and record your name on the grave.
         </Callout>
       </Section>
 
@@ -429,71 +674,14 @@ export default function CemeteriesPage() {
         </Modal>
       )}
 
-      {/* Grave Site GPS Viewer Modal */}
+      {/* Grave Site GPS Viewer & Drag-and-Drop Flower/Candle Map Modal */}
       {activeGraveSite && (
-        <Modal
-          title={`Grave Site: ${activeGraveSite.fullName} (${activeGraveSite.plot})`}
+        <GraveSiteMapModal
+          grave={activeGraveSite}
+          defaultName={user?.name ?? ''}
           onClose={() => setActiveGraveSite(null)}
-        >
-          <div className="stack" style={{ gap: '14px' }}>
-            <div
-              style={{
-                background: '#f1f5f9',
-                padding: '12px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '8px',
-              }}
-            >
-              <div>
-                <strong>Section:</strong> {activeGraveSite.section}
-              </div>
-              <div>
-                <strong>Plot Number:</strong> {activeGraveSite.plot}
-              </div>
-              <div>
-                <strong>Years:</strong> {activeGraveSite.birthYear} — {activeGraveSite.deathYear}
-              </div>
-              <div>
-                <strong>Status:</strong> {activeGraveSite.verified ? 'Verified Marker' : 'Pending verification'}
-              </div>
-            </div>
-
-            <p style={{ margin: 0, fontSize: '13px' }}>
-              <strong>Walking route from main gate:</strong> {activeGraveSite.walkingDirections}
-            </p>
-
-            <div style={{ borderRadius: '8px', overflow: 'hidden', height: '340px', border: '1px solid #cbd5e1' }}>
-              <iframe
-                title={`Grave ${activeGraveSite.fullName}`}
-                width="100%"
-                height="100%"
-                frameBorder="0"
-                style={{ border: 0 }}
-                src={googleMapsEmbedUrl(activeGraveSite.lat, activeGraveSite.lng)}
-                allowFullScreen
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '12px', color: '#64748b' }}>
-                GPS: {activeGraveSite.lat}, {activeGraveSite.lng}
-              </span>
-              <button
-                type="button"
-                className="btn btn--primary btn--sm"
-                onClick={() => {
-                  setFlowerGrave(activeGraveSite)
-                  setActiveGraveSite(null)
-                }}
-              >
-                💐 Leave Virtual Flowers
-              </button>
-            </div>
-          </div>
-        </Modal>
+          onOpenForm={(grave) => setFlowerGrave(grave)}
+        />
       )}
 
       {/* Virtual Flowers Modal */}
@@ -505,7 +693,7 @@ export default function CemeteriesPage() {
           <form className="stack" style={{ gap: '14px' }} onSubmit={handleSendFlowers}>
             <p className="muted" style={{ margin: 0, fontSize: '13px' }}>
               Select an arrangement to place virtually in loving memory on plot {flowerGrave.plot} at {flowerGrave.section}.
-              Cost: <strong>{TOKEN_COSTS.FLOWER_TRIBUTE} Kuwana Tokens</strong> (Your balance: <strong>{balance}</strong>).
+              Your name and tribute will be permanently recorded on this grave.
             </p>
 
             {flowerError && <Callout tone="danger">{flowerError}</Callout>}
@@ -520,7 +708,7 @@ export default function CemeteriesPage() {
                   onClick={() => setFlowerType('white-lilies' as FlowerTribute['flowerType'])}
                   style={{ textAlign: 'left', padding: '10px' }}
                 >
-                  <div style={{ fontSize: '24px' }}>?????</div>
+                  <div style={{ fontSize: '24px' }}>🌸</div>
                   <strong>Pure White Lilies Wreath</strong>
                   <div style={{ fontSize: '11px', opacity: 0.8 }}>Handcrafted arrangement with ribbon</div>
                 </button>
@@ -530,7 +718,7 @@ export default function CemeteriesPage() {
                   onClick={() => setFlowerType('red-roses' as FlowerTribute['flowerType'])}
                   style={{ textAlign: 'left', padding: '10px' }}
                 >
-                  <div style={{ fontSize: '24px' }}>???</div>
+                  <div style={{ fontSize: '24px' }}>🌹</div>
                   <strong>Red Rose Arrangement in Loving Memory &amp; Ribbon</strong>
                   <div style={{ fontSize: '11px', opacity: 0.8 }}>Deep respect and eternal love</div>
                 </button>
@@ -540,7 +728,7 @@ export default function CemeteriesPage() {
                   onClick={() => setFlowerType('sunflower-wreath' as FlowerTribute['flowerType'])}
                   style={{ textAlign: 'left', padding: '10px' }}
                 >
-                  <div style={{ fontSize: '24px' }}>?????</div>
+                  <div style={{ fontSize: '24px' }}>🕯️</div>
                   <strong>Flickering Eternal Candle</strong>
                   <div style={{ fontSize: '11px', opacity: 0.8 }}>Animated vigil light that shines forever</div>
                 </button>
@@ -550,7 +738,7 @@ export default function CemeteriesPage() {
                   onClick={() => setFlowerType('zimbabwe-protea' as FlowerTribute['flowerType'])}
                   style={{ textAlign: 'left', padding: '10px' }}
                 >
-                  <div style={{ fontSize: '24px' }}>????</div>
+                  <div style={{ fontSize: '24px' }}>🌺</div>
                   <strong>King Protea Heritage Spray</strong>
                   <div style={{ fontSize: '11px', opacity: 0.8 }}>Honour, courage and lasting heritage</div>
                 </button>
@@ -586,7 +774,7 @@ export default function CemeteriesPage() {
                   fontWeight: 600,
                 }}
               >
-                Place in Loving Memory (10 Tokens)
+                Place in Loving Memory
               </button>
             </div>
           </form>

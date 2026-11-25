@@ -26,7 +26,10 @@ export type FlowerTribute = {
   graveId: string
   giverName: string
   message: string
-  flowerType: 'white-lilies' | 'red-roses' | 'sunflower-wreath' | 'zimbabwe-protea'
+  flowerType: 'white-lilies' | 'red-roses' | 'sunflower-wreath' | 'zimbabwe-protea' | 'candle'
+  kind?: 'flower' | 'candle'
+  mapX?: number
+  mapY?: number
   createdAt: string
 }
 
@@ -66,6 +69,7 @@ export const FLOWER_VARIETIES = [
   { id: 'red-roses', name: 'Velvet Red Roses', symbol: 'Deep Love & Everlasting Respect', icon: '🌹' },
   { id: 'sunflower-wreath', name: 'Golden Sunflower Wreath', symbol: 'Warmth & Joyful Spirit', icon: '🌻' },
   { id: 'zimbabwe-protea', name: 'Everlasting Protea', symbol: 'Resilience, Strength & Heritage', icon: '🌺' },
+  { id: 'candle', name: 'Eternal Vigil Candle', symbol: 'Light, Prayer & Remembrance', icon: '🕯️' },
 ] as const
 
 export const cemeteries: Cemetery[] = [

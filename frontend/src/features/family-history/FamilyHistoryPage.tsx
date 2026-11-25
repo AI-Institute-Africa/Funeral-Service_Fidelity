@@ -25,22 +25,37 @@ export default function FamilyHistoryPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [showContrib, setShowContrib] = useState(false)
   const [msg, setMsg] = useState('')
-  const [form, setForm] = useState({ name: '', relationship: '', birthDate: '', deathDate: '', location: '', bio: '', memorialSlug: '' })
+  const [form, setForm] = useState({ name: '', relationship: '', birthDate: '', deathDate: '', location: '', bio: '', memorialSlug: '', photoUrl: '' })
   const [contrib, setContrib] = useState({ invitedName: '', invitedEmail: '', summary: '', details: '' })
   const generations = useMemo(() => buildGenerations(archive), [archive])
   const selected = archive.members.find((m) => m.id === selectedId) ?? archive.members[0]
   const rels = selected ? memberLinks(archive, selected.id) : []
 
-  function flash(text: string) { setMsg(text); window.setTimeout(() => setMsg(''), 2500) }
+  function flash(text: string) { setMsg(text); window.setTimeout(() => setMsg(''), 3000) }
   function onVisibility(v: FamilyVisibility) { setArchive(familyHistoryStore.setVisibility(v)); flash('Privacy and visibility updated (prototype).') }
+  function readImageFile(file: File | undefined, cb: (dataUrl: string) => void) {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') cb(reader.result)
+    }
+    reader.readAsDataURL(file)
+  }
   function onAdd(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim() || !form.relationship.trim()) return
-    const next = familyHistoryStore.addMember({
+    const { archive: next, updatedExisting } = familyHistoryStore.addMember({
       name: form.name.trim(), relationship: form.relationship.trim(), birthDate: form.birthDate || undefined,
       deathDate: form.deathDate || undefined, location: form.location.trim() || undefined, bio: form.bio.trim(), memorialSlug: form.memorialSlug.trim() || undefined,
+      photoUrl: form.photoUrl || undefined,
     })
-    setArchive(next); setSelectedId(next.members[next.members.length - 1]?.id ?? selectedId); setForm({ name: '', relationship: '', birthDate: '', deathDate: '', location: '', bio: '', memorialSlug: '' }); setShowAdd(false); flash('Family member added to the sample tree.')
+    setArchive(next)
+    if (!updatedExisting) {
+      setSelectedId(next.members[next.members.length - 1]?.id ?? selectedId)
+    }
+    setForm({ name: '', relationship: '', birthDate: '', deathDate: '', location: '', bio: '', memorialSlug: '', photoUrl: '' })
+    setShowAdd(false)
+    flash(updatedExisting ? `${form.name.trim()} is already on this family tree — existing profile updated.` : 'Family member added to the family tree.')
   }
   function onContribute(e: React.FormEvent) {
     e.preventDefault()
@@ -95,6 +110,7 @@ export default function FamilyHistoryPage() {
             <label className="field"><span className="field__label">Death date</span><input className="input" type="date" value={form.deathDate} onChange={(e) => setForm({ ...form, deathDate: e.target.value })} /></label>
             <label className="field"><span className="field__label">Location</span><input className="input" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></label>
             <label className="field"><span className="field__label">Connected memorial slug (optional)</span><input className="input" value={form.memorialSlug} onChange={(e) => setForm({ ...form, memorialSlug: e.target.value })} placeholder="grace-nyathi" /></label>
+            <label className="field"><span className="field__label">Photo (optional)</span><input className="input" type="file" accept="image/*" onChange={(e) => readImageFile(e.target.files?.[0], (photoUrl) => setForm((f) => ({ ...f, photoUrl })))} /></label>
           </div>
           <label className="field"><span className="field__label">Biography / note</span><textarea className="textarea" rows={3} value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} /></label>
           <div className="fh-actions"><button type="submit" className="btn btn--primary btn--sm">Add member</button><button type="button" className="btn btn--outline btn--sm" onClick={() => setShowAdd(false)}>Cancel</button></div>
@@ -128,7 +144,7 @@ export default function FamilyHistoryPage() {
 
         <aside className="card stack fh-profile" aria-live="polite">
           <p className="eyebrow">Family member profile</p>
-          {selected ? <MemberProfile member={selected} rels={rels} /> : <p className="muted">Select a family member.</p>}
+          {selected ? <MemberProfile member={selected} rels={rels} onUploadPhoto={(file) => readImageFile(file, (photoUrl) => { setArchive(familyHistoryStore.updateMember(selected.id, { photoUrl })); flash(`Photo updated for ${selected.name}.`) })} /> : <p className="muted">Select a family member.</p>}
         </aside>
       </div>
 
@@ -157,7 +173,7 @@ export default function FamilyHistoryPage() {
 
       <section className="card stack" aria-labelledby="fh-photos">
         <p className="eyebrow">Sample photographs & records</p>
-        <h2 id="fh-photos" className="panel__title">Family photographs</h2>
+        <div className="page-head--row" style={{ alignItems: "end" }}><h2 id="fh-photos" className="panel__title">Family photographs</h2><label className="btn btn--outline btn--sm" style={{ cursor: "pointer" }}><Icon name="plus" size={16} /> Upload photo<input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => readImageFile(e.target.files?.[0], (url) => { setArchive(familyHistoryStore.addPhoto({ url, caption: "Family photograph", year: new Date().getFullYear() })); flash("Family photograph uploaded.") })} /></label></div>
         <div className="fh-photos">
           {archive.photos.map((p) => (
             <figure key={p.id} className="fh-photo">
@@ -223,7 +239,7 @@ export default function FamilyHistoryPage() {
   )
 }
 
-function MemberProfile({ member, rels }: { member: FamilyMember; rels: ReturnType<typeof memberLinks> }) {
+function MemberProfile({ member, rels, onUploadPhoto }: { member: FamilyMember; rels: ReturnType<typeof memberLinks>; onUploadPhoto: (file: File | undefined) => void }) {
   return (
     <>
       <div className="fh-profile__head">
@@ -232,6 +248,12 @@ function MemberProfile({ member, rels }: { member: FamilyMember; rels: ReturnTyp
           <h3 className="fh-profile__name">{member.name}</h3>
           <p className="muted">{member.relationship}{member.location ? ` · ${member.location}` : ''}</p>
         </div>
+      </div>
+      <div>
+        <label className="btn btn--outline btn--sm" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+          📷 {member.photoUrl ? "Update photo" : "Upload photo"}
+          <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => onUploadPhoto(e.target.files?.[0])} />
+        </label>
       </div>
       <div className="fh-kv">
         <div><span>Birth</span><strong>{member.birthDate || 'Not recorded'}</strong></div>

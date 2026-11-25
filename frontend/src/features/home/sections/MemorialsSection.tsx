@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Icon } from '@/components/ui/Icon'
 import { Section } from '@/components/ui/Section'
 import { SectionHead } from '@/components/ui/SectionHead'
-import { memorialPath, paths } from '@/config/routes'
+import { anchor, memorialPath, paths } from '@/config/routes'
 
 export function MemorialsSection() {
   return (
@@ -46,7 +46,10 @@ export function MemorialsSection() {
             <Link className="btn btn--dark btn--sm" to={memorialPath('grace-nyathi')}>
               See an example memorial
             </Link>
-            <Link className="btn btn--outline btn--sm" to="/account/family-history">
+            <Link className="btn btn--primary btn--sm" to={`${paths.cemeteries}?grave=Grace+Nyathi`}>
+              🌸🕯️ Place Flower &amp; Candle on Grave Map
+            </Link>
+            <Link className="btn btn--outline btn--sm" to={anchor('legacy-studio')}>
               Family History & Family Tree
             </Link>
           </div>

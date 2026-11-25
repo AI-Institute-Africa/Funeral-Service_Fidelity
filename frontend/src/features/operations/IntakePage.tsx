@@ -173,7 +173,7 @@ function IntakePage() {
                   <span style={{ background: '#ecfdf5', color: '#047857', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}>📧 Email: Dispatched</span>
                   <span style={{ background: '#ecfdf5', color: '#047857', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}>📞 Call: Scheduled</span>
                 </div>
-                <span>Fidelity operations team is processing your case and assigning your coordinator.</span>
+                <span>Fidelity operations team is processing your case and assigning your coordinator. Please check your phone and WhatsApp for further actions.</span>
                 <Link to={paths.accountFuneralCases} className="btn btn--sm btn--primary" style={{ marginTop: '8px', display: 'inline-block' }}>View your cases</Link>
               </div>
             )}

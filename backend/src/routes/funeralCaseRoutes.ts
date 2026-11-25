@@ -9,7 +9,7 @@ import { assignmentSchema, caseDocumentSchema, caseIdSchema, caseInputSchema, re
 import { dispatchWorkflowNotifications } from '../services/multiChannelNotifier'
 
 function reference(): string {
-  return `FLA-${randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`
+  return `FLA-${randomUUID().replaceAll('-', '').slice(0, 6).toUpperCase()}`
 }
 
 type StoredCaseDocument = {

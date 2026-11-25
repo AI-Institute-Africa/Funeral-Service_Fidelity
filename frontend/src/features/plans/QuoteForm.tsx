@@ -80,8 +80,8 @@ export function QuoteForm({ plan }: { plan: Plan }) {
 
       {status === 'success' && receipt && (
         <Toast>
-          Sample enquiry submitted (reference {receipt.reference}). A provider adviser would follow up with a formal
-          quotation.
+          Request submitted successfully (reference {receipt.reference}). Please check your phone and WhatsApp for further actions.
+
         </Toast>
       )}
       {status === 'error' && <Toast>{getErrorMessage(error)}</Toast>}

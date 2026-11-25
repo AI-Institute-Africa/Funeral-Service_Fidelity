@@ -25,10 +25,44 @@ function write(archive: FamilyHistoryArchive) {
 export const familyHistoryStore = {
   get: (): FamilyHistoryArchive => read(),
   setVisibility: (visibility: FamilyVisibility) => write({ ...read(), visibility }),
-  addMember: (input: Pick<FamilyMember, 'name' | 'relationship' | 'birthDate' | 'deathDate' | 'location' | 'bio' | 'memorialSlug'>) => {
+  addMember: (
+    input: Pick<FamilyMember, 'name' | 'relationship' | 'birthDate' | 'deathDate' | 'location' | 'bio' | 'memorialSlug' | 'photoUrl'>,
+  ): { archive: FamilyHistoryArchive; updatedExisting: boolean } => {
     const archive = read()
+    const normalized = input.name.trim().toLowerCase()
+    const existing = archive.members.find((m) => m.name.trim().toLowerCase() === normalized)
+    if (existing) {
+      // Person is already on the family tree: update existing record only (no duplicate)
+      const updatedMembers = archive.members.map((m) =>
+        m.id === existing.id
+          ? {
+              ...m,
+              relationship: input.relationship || m.relationship,
+              birthDate: input.birthDate || m.birthDate,
+              deathDate: input.deathDate || m.deathDate,
+              location: input.location || m.location,
+              bio: input.bio || m.bio,
+              memorialSlug: input.memorialSlug || m.memorialSlug,
+              photoUrl: input.photoUrl || m.photoUrl,
+            }
+          : m,
+      )
+      return { archive: write({ ...archive, members: updatedMembers }), updatedExisting: true }
+    }
     const member: FamilyMember = { id: nextMemberId(), ...input }
-    return write({ ...archive, members: [...archive.members, member] })
+    return { archive: write({ ...archive, members: [...archive.members, member] }), updatedExisting: false }
+  },
+  updateMember: (id: string, patch: Partial<FamilyMember>) => {
+    const archive = read()
+    return write({
+      ...archive,
+      members: archive.members.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+    })
+  },
+  addPhoto: (input: { url: string; caption?: string; year?: number }) => {
+    const archive = read()
+    const photo = { id: nextMemberId('fp'), ...input }
+    return write({ ...archive, photos: [photo, ...archive.photos] })
   },
   reviewContribution: (id: string, status: ContributionStatus, reviewer: string) => {
     const archive = read()
