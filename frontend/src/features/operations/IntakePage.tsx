@@ -96,7 +96,8 @@ function IntakePage() {
         serviceLocation: String(form.get('serviceLocation') ?? '').trim() || undefined,
         funeralAt: String(form.get('funeralAt') ?? '') ? new Date(String(form.get('funeralAt'))).toISOString() : undefined,
         funeralLocation: String(form.get('funeralLocation') ?? '').trim() || undefined,
-        policyNumber: mode === 'report' ? policyNumber.trim() : undefined,
+        policyNumber: mode === 'report' ? (policyNumber.trim() || undefined) : undefined,
+        contactPhone: user.phone,
         requestedPlan: mode === 'apply' ? String(form.get('requestedPlan') ?? '') : undefined,
         applicationChannel: mode === 'apply' ? String(form.get('applicationChannel') ?? '') as 'online' | 'at-fidelity' : undefined,
         applicationLocation: mode === 'apply' ? String(form.get('applicationLocation') ?? '') || undefined : undefined,
@@ -248,7 +249,7 @@ function IntakePage() {
                 <span>I agree that Fidelity may create a private WhatsApp group with my verified number and assigned Fidelity staff to coordinate this case. I understand this shares the case group with its members and I can ask Fidelity to close it.</span>
               </label>
               <p className="intake__fine-print">Relatives are not added automatically. You may invite a relative after the case is registered only after confirming that person has agreed to join the group.</p>
-              <button className="btn btn--primary" type="submit" disabled={busy || (mode === 'report' && !policyNumber.trim())}>
+              <button className="btn btn--primary" type="submit" disabled={busy}>
                 {busy ? 'Submitting securely…' : mode === 'report' ? 'Submit funeral case' : 'Submit cover consultation'}
               </button>
             </form>

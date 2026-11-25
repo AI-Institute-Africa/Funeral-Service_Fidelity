@@ -30,6 +30,7 @@ export type FuneralCaseRecord = {
 export type FuneralCaseInput = {
   caseType: FuneralCaseRecord['caseType']
   reporterName: string
+  contactPhone?: string
   deceasedName?: string
   dateOfDeath?: string
   serviceLocation?: string

@@ -24,7 +24,8 @@ export const caseInputSchema = z.object({
   serviceLocation: z.string().trim().max(200).optional(),
   funeralAt: z.string().datetime().optional().or(z.literal('')),
   funeralLocation: z.string().trim().max(200).optional(),
-  policyNumber: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9/-]{1,39}$/).optional(),
+  policyNumber: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9/-]{1,39}$/).optional().or(z.literal('')),
+  contactPhone: z.string().trim().optional(),
   requestedPlan: z.string().trim().max(120).optional(),
   applicationChannel: z.enum(['online', 'at-fidelity']).optional(),
   applicationLocation: z.string().trim().max(200).optional(),
@@ -32,7 +33,6 @@ export const caseInputSchema = z.object({
   whatsappConsent: z.boolean(),
 }).superRefine((value, context) => {
   if (value.caseType === 'POLICY_COVERED') {
-    if (!value.policyNumber) context.addIssue({ code: 'custom', path: ['policyNumber'], message: 'Enter the policy number.' })
     if (!value.deceasedName) context.addIssue({ code: 'custom', path: ['deceasedName'], message: 'Enter the deceased person’s name.' })
     if (!value.dateOfDeath) context.addIssue({ code: 'custom', path: ['dateOfDeath'], message: 'Enter the date of death.' })
     if (!value.serviceLocation) context.addIssue({ code: 'custom', path: ['serviceLocation'], message: 'Enter the service location.' })
