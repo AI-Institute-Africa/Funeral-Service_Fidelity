@@ -12,7 +12,7 @@ const MOCK_LATENCY_MS = 450
 const mockServer = () => import('./mock-store')
 
 export async function requestOtp(phone: string): Promise<OtpReceipt> {
-  return post<OtpReceipt>('/auth/otp', { phone })
+  return post<OtpReceipt>('/auth/otp', { phone }, { timeoutMs: 25_000 })
 }
 
 export async function signIn(input: SignInInput): Promise<User> {

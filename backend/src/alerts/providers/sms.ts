@@ -39,7 +39,8 @@ export class SmsPopSmsProvider implements SmsProvider {
           sender_id: this.cfg.senderId,
           ...(this.cfg.campaignName ? { name: this.cfg.campaignName } : {}),
           message: body,
-          manual_contacts: [to],
+          contact_import_method: 'manual',
+          manual_contacts: to, // SMSPoP expects a string (comma-separated), not an array
         }),
       })
       const json = (await res.json().catch(() => ({}))) as {

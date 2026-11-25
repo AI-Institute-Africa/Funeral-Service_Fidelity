@@ -1,3 +1,9 @@
+// Allow Node.js to connect to SMSPoP (self-signed / intermediate CA not in Node's bundle)
+// Safe for internal backend-to-backend calls; remove if SMSPoP upgrades their cert chain.
+if (process.env.NODE_ENV !== 'production') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+}
+
 import { createApp } from './app'
 import { env } from './config/env'
 
