@@ -29,14 +29,22 @@
     position: sticky;
     top: calc(var(--header-h) + var(--space-5));
     max-height: calc(100dvh - var(--header-h) - var(--space-8));
-    overflow-y: auto;
+    overflow-y: scroll;
+    overscroll-behavior: contain;
     scrollbar-gutter: stable;
-    padding-right: var(--space-1);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(15, 23, 42, 0.3) transparent;
+    padding-right: var(--space-2);
     display: grid;
     gap: var(--space-5);
   }
 
   .account-nav { display: grid; gap: var(--space-1); }
+
+  .account-side::-webkit-scrollbar { width: 6px; }
+  .account-side::-webkit-scrollbar-track { background: transparent; }
+  .account-side::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.28); border-radius: 999px; }
+  .account-side::-webkit-scrollbar-thumb:hover { background: rgba(15, 23, 42, 0.45); }
 
   .account-nav__link {
     display: flex;
