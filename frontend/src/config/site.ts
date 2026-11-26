@@ -110,7 +110,6 @@ export const footerColumns: { title: string; links: NavLink[] }[] = [
       { label: 'Request a sample quote', to: anchor('quote-form') },
       { label: 'Sign in', to: paths.login },
       { label: 'My account', to: paths.account },
-      { label: 'Staff portal', to: paths.provider },
       { label: 'Demo prototype', to: anchor('top') },
     ],
   },

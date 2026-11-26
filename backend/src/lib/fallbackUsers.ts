@@ -43,6 +43,10 @@ function writeUsers(users: FallbackUserRecord[]): void {
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8')
 }
 
+export function listFallbackUsers(): FallbackUserRecord[] {
+  return readUsers()
+}
+
 export function findFallbackUserByPhone(phone: string): FallbackUserRecord | undefined {
   return readUsers().find((u) => u.phone === phone)
 }

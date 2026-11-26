@@ -1293,7 +1293,7 @@ function TaskWorkflowPanel({
   const [syncing, setSyncing] = useState(false)
   const [syncBanner, setSyncBanner] = useState('')
 
-  if (!assignedTo) return null
+  const effectiveAssignee = assignedTo || caseItem.coordinator || 'Operations Team'
 
   const activeSteps = steps && steps.length > 0 ? steps : createDefaultTaskSteps(taskName)
   const activeLogs = logbook ?? []
@@ -1308,7 +1308,7 @@ function TaskWorkflowPanel({
         body: JSON.stringify({
           caseReference: caseItem.reference,
           deceasedName: caseItem.deceasedName,
-          staffName: assignedTo,
+          staffName: effectiveAssignee,
           familyPhone: caseItem.phone,
           taskName,
           logUpdate: entryText,
@@ -1316,7 +1316,7 @@ function TaskWorkflowPanel({
           updatedBy: actor,
         }),
       })
-      setSyncBanner('Logbook & WhatsApp group synced')
+      setSyncBanner('Logbook, SMS & WhatsApp group synced')
       setTimeout(() => setSyncBanner(''), 3500)
     } catch {
       // Keep local logbook even if gateway is offline
@@ -1325,8 +1325,18 @@ function TaskWorkflowPanel({
     }
   }
 
-  const toggleStep = (step: TaskStep) => {
+  const toggleStep = (step: TaskStep, index: number) => {
     const nextDone = !step.done
+    if (nextDone && index > 0 && !activeSteps[index - 1]?.done) {
+      setSyncBanner(`Complete Step ${index} before Step ${index + 1}.`)
+      setTimeout(() => setSyncBanner(''), 3500)
+      return
+    }
+    if (!nextDone && index < activeSteps.length - 1 && activeSteps[index + 1]?.done) {
+      setSyncBanner(`Reopen Step ${index + 2} before reopening Step ${index + 1}.`)
+      setTimeout(() => setSyncBanner(''), 3500)
+      return
+    }
     const nextSteps = activeSteps.map((s) =>
       s.id === step.id
         ? {
@@ -1382,29 +1392,35 @@ function TaskWorkflowPanel({
     <div className="operations__task-workflow">
       <div className="operations__task-steps">
         <div className="operations__task-workflow-header">
-          <strong>Action steps for {assignedTo}</strong>
+          <strong>Action steps for {effectiveAssignee}</strong>
           <span className="muted">{completedCount} / {activeSteps.length} completed</span>
         </div>
         <ul className="operations__steps-list">
-          {activeSteps.map((step, index) => (
-            <li key={step.id} className={step.done ? 'is-done' : ''}>
-              <label className="operations__step-item">
-                <input
-                  type="checkbox"
-                  checked={step.done}
-                  onChange={() => toggleStep(step)}
-                />
-                <span>
-                  <strong>Step {index + 1}:</strong> {step.label}
-                </span>
-                {step.completedAt && (
-                  <small className="muted">
-                    ✓ {step.completedBy || assignedTo} · {new Date(step.completedAt).toLocaleTimeString()}
-                  </small>
-                )}
-              </label>
-            </li>
-          ))}
+          {activeSteps.map((step, index) => {
+            const locked = step.done
+              ? index < activeSteps.length - 1 && Boolean(activeSteps[index + 1]?.done)
+              : index > 0 && !activeSteps[index - 1]?.done
+            return (
+              <li key={step.id} className={step.done ? 'is-done' : ''}>
+                <label className="operations__step-item" title={locked ? `Complete Step ${index} first` : undefined}>
+                  <input
+                    type="checkbox"
+                    checked={step.done}
+                    disabled={locked}
+                    onChange={() => toggleStep(step, index)}
+                  />
+                  <span>
+                    <strong>Step {index + 1}:</strong> {step.label}
+                  </span>
+                  {step.completedAt && (
+                    <small className="muted">
+                      ✓ {step.completedBy || effectiveAssignee} · {new Date(step.completedAt).toLocaleTimeString()}
+                    </small>
+                  )}
+                </label>
+              </li>
+            )
+          })}
         </ul>
       </div>
 
@@ -1535,7 +1551,25 @@ function ChecklistWorkspace({ item, catalogue, actor, changeCase }: { item: Fune
           <div className="operations__item-list">{item.checklist.filter((task) => !task.removedAt).map((task) => (
             <article key={task.id} className="operations__record">
               <div className="operations__record-heading"><div><h4>{task.name}</h4><p className="muted">{task.category || 'Uncategorised'} · Qty {task.quantity}{task.estimate ? ` · estimate ${formatMoney(task.estimate.amount, task.estimate.currency)}` : ''}{task.assignedTo ? ` · 📲 Assigned: ${task.assignedTo} (Auto-notified & Group Synced)` : ' · Unassigned'}</p></div>
-                <label className="field"><span className="visually-hidden">Status for {task.name}</span><select className="select" value={task.status} onChange={(event) => changeCase(item.id, 'Updated checklist item', `${task.name}: ${task.status} → ${event.target.value}.`, (current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === task.id ? { ...entry, status: event.target.value as ChecklistStatus } : entry) }))}>{CHECKLIST_STATUSES.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}</select></label>
+                <label className="field"><span className="visually-hidden">Status for {task.name}</span><select className="select" value={task.status} onChange={(event) => {
+                  const nextStatus = event.target.value as ChecklistStatus
+                  changeCase(item.id, 'Updated checklist item', `${task.name}: ${task.status} → ${nextStatus}.`, (current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === task.id ? { ...entry, status: nextStatus } : entry) }))
+                  void fetch('/api/whatsapp/notify-task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      caseReference: item.reference,
+                      deceasedName: item.deceasedName,
+                      staffName: task.assignedTo || item.coordinator || 'Operations Team',
+                      familyPhone: item.phone,
+                      taskName: task.name,
+                      previousStatus: task.status,
+                      nextStatus,
+                      logUpdate: `Task "${task.name}" status changed from ${task.status} to ${nextStatus}.`,
+                      updatedBy: actor,
+                    }),
+                  }).catch(() => {})
+                }}>{CHECKLIST_STATUSES.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}</select></label>
               </div>
               <div className="operations__form-grid operations__form-grid--tight">
                 <label className="field"><span className="field__label">Assigned staff (Auto-notified via WhatsApp, SMS, Email &amp; Group)</span><select className="select" value={task.assignedTo} onChange={(event) => {
@@ -1629,6 +1663,21 @@ function TimelineWorkspace({ item, actor, changeCase }: { item: FuneralCase; act
                   }
                   setStageError('')
                   changeCase(item.id, status === 'completed' ? 'Completed stage' : stage.status === 'completed' ? 'Reopened stage' : 'Updated stage', `${stage.label} set to ${status.replaceAll('-', ' ')}.${reason ? ` Reason: ${reason}` : ''}`, (current) => ({ ...current, stages: current.stages.map((entry) => entry.id === stage.id ? { ...entry, status, blocker: reason || entry.blocker, actualAt: status === 'completed' ? nowIso() : status === 'not-started' || status === 'cancelled' ? undefined : entry.actualAt } : entry) }))
+                  void fetch('/api/whatsapp/notify-task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      caseReference: item.reference,
+                      deceasedName: item.deceasedName,
+                      staffName: stage.assignedTo || item.coordinator || 'Operations Team',
+                      familyPhone: item.phone,
+                      taskName: `Stage: ${stage.label}`,
+                      previousStatus: stage.status,
+                      nextStatus: status,
+                      logUpdate: `Stage "${stage.label}" updated to ${status.replaceAll('-', ' ')}.${reason ? ` Note: ${reason}` : ''}`,
+                      updatedBy: actor,
+                    }),
+                  }).catch(() => {})
                 }}>{(['not-started', 'pending', 'in-progress', 'blocked', 'completed', 'cancelled'] as StageStatus[]).map((status) => <option key={status} value={status}>{status.replaceAll('-', ' ')}</option>)}</select></label>
               </div>
               <div className="operations__form-grid operations__form-grid--tight">
@@ -1758,6 +1807,19 @@ function TransportWorkspace({ item, changeCase }: { item: FuneralCase; changeCas
       notes: String(form.get('notes') ?? '').trim(),
     }
     changeCase(item.id, 'Created transport movement', `${movement.leg}: ${movement.pickup} → ${movement.destination}.`, (current) => ({ ...current, movements: [...current.movements, movement] }))
+    void fetch('/api/whatsapp/notify-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        caseReference: item.reference,
+        deceasedName: item.deceasedName,
+        staffName: movement.driver || item.coordinator || 'Transport & Fleet',
+        familyPhone: item.phone,
+        taskName: `Transport: ${movement.leg}`,
+        logUpdate: `Scheduled ${movement.leg}: ${movement.pickup} → ${movement.destination}${movement.vehicle ? ` (${movement.vehicle})` : ''}.`,
+        updatedBy: 'Transport Desk',
+      }),
+    }).catch(() => {})
     event.currentTarget.reset()
   }
   return (
@@ -1774,7 +1836,25 @@ function TransportWorkspace({ item, changeCase }: { item: FuneralCase; changeCas
       <section className="card operations__panel"><h3>Transport movements</h3>
         {item.movements.length ? <div className="operations__item-list">{item.movements.map((movement) => <article className="operations__record" key={movement.id}>
           <div className="operations__record-heading"><div><h4>{movement.leg}</h4><p className="muted">{movement.pickup} → {movement.destination} · {movement.vehicle || 'No vehicle set'} · {movement.driver || 'No driver set'}</p></div>
-            <label className="field"><span className="visually-hidden">Movement status</span><select className="select" value={movement.status} onChange={(event) => changeCase(item.id, 'Updated transport status', `${movement.leg} set to ${event.target.value}.`, (current) => ({ ...current, movements: current.movements.map((entry) => entry.id === movement.id ? { ...entry, status: event.target.value as TransportStatus, actualAt: event.target.value === 'completed' ? nowIso() : entry.actualAt } : entry) }))}>{(['planned', 'assigned', 'in-progress', 'completed', 'cancelled'] as TransportStatus[]).map((status) => <option key={status} value={status}>{status.replaceAll('-', ' ')}</option>)}</select></label></div>
+            <label className="field"><span className="visually-hidden">Movement status</span><select className="select" value={movement.status} onChange={(event) => {
+              const nextStatus = event.target.value as TransportStatus
+              changeCase(item.id, 'Updated transport status', `${movement.leg} set to ${nextStatus}.`, (current) => ({ ...current, movements: current.movements.map((entry) => entry.id === movement.id ? { ...entry, status: nextStatus, actualAt: nextStatus === 'completed' ? nowIso() : entry.actualAt } : entry) }))
+              void fetch('/api/whatsapp/notify-task', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  caseReference: item.reference,
+                  deceasedName: item.deceasedName,
+                  staffName: movement.driver || item.coordinator || 'Transport & Fleet',
+                  familyPhone: item.phone,
+                  taskName: `Transport: ${movement.leg}`,
+                  previousStatus: movement.status,
+                  nextStatus,
+                  logUpdate: `Transport "${movement.leg}" (${movement.pickup} → ${movement.destination}) is now ${nextStatus.replaceAll('-', ' ')}.`,
+                  updatedBy: movement.driver || 'Transport Desk',
+                }),
+              }).catch(() => {})
+            }}>{(['planned', 'assigned', 'in-progress', 'completed', 'cancelled'] as TransportStatus[]).map((status) => <option key={status} value={status}>{status.replaceAll('-', ' ')}</option>)}</select></label></div>
           <p className="muted">Planned: {movement.plannedAt ? new Date(movement.plannedAt).toLocaleString() : 'Not set'}{movement.actualAt ? ` · Completed: ${new Date(movement.actualAt).toLocaleString()}` : ''}</p>
           <label className="field"><span className="field__label">Notes</span><input className="input" defaultValue={movement.notes} onBlur={(event) => event.target.value !== movement.notes && changeCase(item.id, 'Updated transport notes', `${movement.leg} notes updated.`, (current) => ({ ...current, movements: current.movements.map((entry) => entry.id === movement.id ? { ...entry, notes: event.target.value } : entry) }))} /></label>
         </article>)}</div> : <EmptyState title="No transport movements yet" detail="Record pickup-to-mortuary and mortuary-to-gravesite legs when details are known."/>}
@@ -2162,8 +2242,8 @@ function ExhumationsWorkspace({
             <div><dt>Exhumation address / grave</dt><dd>{item.address}</dd></div>
             <div><dt>Destination / reinterment address</dt><dd>{item.destinationAddress || 'Not entered'}</dd></div>
             <div><dt>Requested date</dt><dd>{item.requestedAt}</dd></div>
-            <div><dt>Operational cost estimate</dt><dd>{item.estimatedCost === undefined ? 'Not entered' : formatMoney(item.estimatedCost, item.currency)}</dd></div>
-            <div><dt>Customer price / quote</dt><dd>{item.quotedPrice === undefined ? 'Not entered' : formatMoney(item.quotedPrice, item.currency)}</dd></div>
+            <div><dt>Operational cost estimate</dt><dd>{item.estimatedCost === undefined ? 'Not entered' : formatMoney(item.estimatedCost, item.currency || 'USD')}</dd></div>
+            <div><dt>Customer price / quote</dt><dd>{item.quotedPrice === undefined ? 'Not entered' : formatMoney(item.quotedPrice, item.currency || 'USD')}</dd></div>
           </div>
           <div className="operations__form-grid operations__form-grid--tight">
             <label className="field"><span className="field__label">Permit reference</span><input className="input" defaultValue={item.permitReference} onBlur={(event) => event.target.value !== item.permitReference && onUpdate(item, 'Updated permit reference.', (current) => ({ ...current, permitReference: event.target.value.trim() }))} /></label>
@@ -2202,7 +2282,7 @@ function ExhumationsWorkspace({
             </div>
             <h4>Requirements checklist</h4>
             <div className="operations__check-grid">
-              {item.requirements.map((requirement) => (
+              {(item.requirements ?? []).map((requirement) => (
                 <label className="field" key={requirement.id}>
                   <span className="field__label">{requirement.name}</span>
                   <select className="select" value={requirement.status} onChange={(event) => {

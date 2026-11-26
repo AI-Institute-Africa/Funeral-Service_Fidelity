@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon } from '@/components/ui/Icon'
 import { QueryState } from '@/components/ui/QueryState'
@@ -9,7 +9,7 @@ import { formatAge, formatUsd } from '@/lib/format'
 import type { AdminOrder } from './data'
 import { OrderSheet } from './OrderSheet'
 import { usePortalRole } from './portal-ui'
-import { useOrders } from './queries'
+import { useCreateWalkInOrder, useOrders } from './queries'
 import './portal.css'
 
 type StatusFilter = 'all' | 'confirm' | 'progress' | 'payment' | 'done'
@@ -61,6 +61,7 @@ function dateMatches(order: AdminOrder, filter: DateFilter): boolean {
 }
 
 function NewWalkInOrderModal({ onClose }: { onClose: () => void }) {
+  const createOrder = useCreateWalkInOrder()
   const [customerName, setCustomerName] = useState('')
   const [phone, setPhone] = useState('')
   const [product, setProduct] = useState('')
@@ -72,7 +73,21 @@ function NewWalkInOrderModal({ onClose }: { onClose: () => void }) {
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!customerName.trim() || !product.trim()) return
-    setSubmitted(true)
+    createOrder.mutate(
+      {
+        customerName: customerName.trim(),
+        phone: phone.trim(),
+        product: product.trim(),
+        amount: Number(amount) || 0,
+        paymentMethod,
+        notes: notes.trim(),
+      },
+      {
+        onSuccess: () => {
+          setSubmitted(true)
+        },
+      },
+    )
   }
 
   if (submitted) {

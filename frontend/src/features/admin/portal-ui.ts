@@ -1,4 +1,4 @@
-﻿import type { StatusTone } from '@/components/ui/StatusChip'
+import type { StatusTone } from '@/components/ui/StatusChip'
 import type { AssignmentStatus, RequestStatus } from '@/features/account/data'
 import { useAuth } from '@/features/auth'
 import type { OrderStatus } from '@/features/marketplace/data'
@@ -16,6 +16,7 @@ export const requestStatusDisplay: Record<RequestStatus, { label: string; tone: 
   assigned: { label: 'Assigned', tone: 'info' },
   in_progress: { label: 'In progress', tone: 'info' },
   complete: { label: 'Complete', tone: 'success' },
+  cancelled: { label: 'Cancelled', tone: 'danger' },
 }
 
 export const assignmentDisplay: Record<AssignmentStatus, { label: string; tone: StatusTone }> = {

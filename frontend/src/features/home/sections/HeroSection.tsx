@@ -39,7 +39,7 @@ export function HeroSection() {
           </p>
           <div className="hero__actions">
             <Link to={paths.funeralSupport} className="btn btn--primary btn--lg">
-              Request assistance
+              Claims &amp; support
             </Link>
             <Link to={anchor('plans')} className="btn btn--outline btn--lg hero__ghost">
               Explore funeral plans

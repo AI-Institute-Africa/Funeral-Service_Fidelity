@@ -1,9 +1,21 @@
 import { Router } from 'express'
 import { randomUUID } from 'node:crypto'
 import { prisma } from '../lib/prisma'
+import { listFallbackUsers, findFallbackUserById } from '../lib/fallbackUsers'
+import {
+  listStoredOrders,
+  listStoredRequests,
+  loadPersistedOpsState,
+  savePersistedOpsState,
+  saveStoredOrders,
+  saveStoredRequests,
+  type StoredOrder,
+  type StoredRequest,
+} from '../lib/fallbackPortalStore'
 import { requireAdminSession } from '../middleware/session'
 import { createWhatsAppFuneralGroup, notifyDual, sendWhatsAppAlert } from '../services/whatsappGateway'
-import { dispatchWorkflowNotifications } from '../services/multiChannelNotifier'
+import { dispatchWorkflowNotifications, KNOWN_STAFF } from '../services/multiChannelNotifier'
+import { createSmsProvider } from '../alerts/providers/sms'
 
 const STAGE_TEMPLATES = [
   'Case intake and eligibility / payment path',
@@ -332,7 +344,7 @@ async function syncCustomerCases(): Promise<void> {
   }
 }
 
-const inMemoryOperationsStore: any = {
+const createSeedOperationsStore = (): any => ({
   version: 2,
   cases: [
     {
@@ -410,22 +422,25 @@ const inMemoryOperationsStore: any = {
       customerName: 'Tendai Moyo',
       phone: '+263772123456',
       deceasedName: 'Sekuru Moyo',
-      originCemetery: 'Granville Cemetery (Mbudzi)',
-      destinationCemetery: 'Zororo Memorial Park',
-      reason: 'Family re-interment to private family plot',
+      address: 'Granville Cemetery (Mbudzi), Harare',
+      destinationAddress: 'Zororo Memorial Park, Harare',
+      currency: 'USD',
+      requestedAt: new Date().toISOString().slice(0, 10),
       status: 'permits-in-progress',
-      statutoryChecklist: [
-        { id: 'chk-1', label: 'Council Health Dept Permit', completed: true },
-        { id: 'chk-2', label: 'Ministry of Home Affairs Approval', completed: true },
-        { id: 'chk-3', label: 'ZRP Clearance / Notice', completed: false },
-        { id: 'chk-4', label: 'Zinc-lined Hermetic Coffin', completed: true },
-        { id: 'chk-5', label: 'Registered Medical Officer Presence', completed: false },
-      ],
       estimatedCost: 1200,
       quotedPrice: 1200,
+      permitReference: 'HCC-EXH-2025-19',
+      permitStatus: 'submitted',
+      requirements: EXHUMATION_REQUIREMENTS.map((name, idx) => ({
+        id: `req-${idx + 1}`,
+        name,
+        status: idx < 2 ? 'verified' : 'pending',
+        notes: '',
+      })),
       notes: 'Initial consultations done with Warren Hills & Zororo authorities.',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      demo: true,
     },
   ],
   tokenCharges: [
@@ -448,6 +463,28 @@ const inMemoryOperationsStore: any = {
       summary: 'Fidelity Operations Workspace initialized',
     },
   ],
+})
+
+const inMemoryOperationsStore: any = loadPersistedOpsState(createSeedOperationsStore)
+// Normalize legacy seed exhumations if an older operations.json is on disk
+if (Array.isArray(inMemoryOperationsStore.exhumations)) {
+  inMemoryOperationsStore.exhumations = inMemoryOperationsStore.exhumations.map((e: any) => ({
+    ...e,
+    address: e.address || e.originCemetery || 'Not entered',
+    destinationAddress: e.destinationAddress || e.destinationCemetery || '',
+    currency: e.currency || 'USD',
+    requestedAt: e.requestedAt || (e.createdAt ? String(e.createdAt).slice(0, 10) : new Date().toISOString().slice(0, 10)),
+    permitReference: e.permitReference ?? '',
+    permitStatus: e.permitStatus || 'pending',
+    requirements: Array.isArray(e.requirements)
+      ? e.requirements
+      : EXHUMATION_REQUIREMENTS.map((name, idx) => ({
+          id: `req-${idx + 1}`,
+          name,
+          status: 'pending',
+          notes: '',
+        })),
+  }))
 }
 export function createOperationsRouter(): Router {
   const router = Router()
@@ -594,8 +631,59 @@ export function createOperationsRouter(): Router {
       }
 
       res.status(201).json(created)
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
+    } catch {
+      const body = req.body
+      const now = new Date().toISOString()
+      const created = {
+        id: body.id || `case-${randomUUID()}`,
+        reference: body.reference || `CASE-${Math.floor(1000 + Math.random() * 9000)}`,
+        caseType: body.caseType || 'cash-walk-in',
+        customerName: body.customerName || 'Walk-in Customer',
+        phone: body.phone || '',
+        deceasedName: body.deceasedName || 'Not specified',
+        dateOfDeath: body.dateOfDeath || now.slice(0, 10),
+        serviceLocation: body.serviceLocation || 'Harare',
+        branch: body.branch || 'Harare',
+        funeralAt: body.funeralAt || null,
+        funeralLocation: body.funeralLocation || '',
+        coordinator: body.coordinator || '',
+        priority: body.priority || 'standard',
+        priorityReason: body.priorityReason || '',
+        status: body.status || 'new',
+        policyReference: body.policyReference || null,
+        intakeChannel: body.intakeChannel || 'staff',
+        postMortem: body.postMortem || 'pending',
+        stages: body.stages || createCaseStages(),
+        checklist: body.checklist || [],
+        documents: body.documents || [],
+        movements: body.movements || [],
+        quotes: body.quotes || [],
+        payments: body.payments || [],
+        contributions: body.contributions || [],
+        walletGoal: body.walletGoal || null,
+        demo: Boolean(body.demo),
+        createdAt: now,
+        updatedAt: now,
+      }
+      inMemoryOperationsStore.cases = [created, ...(inMemoryOperationsStore.cases || [])]
+      savePersistedOpsState(inMemoryOperationsStore)
+      if (created.phone) {
+        void createWhatsAppFuneralGroup({
+          caseReference: created.reference,
+          deceasedName: created.deceasedName,
+          customerName: created.customerName,
+          familyPhone: created.phone,
+        })
+        void dispatchWorkflowNotifications({
+          event: created.caseType === 'cash-walk-in' ? 'walkin_request' : 'customer_self_request',
+          caseReference: created.reference,
+          deceasedName: created.deceasedName,
+          customer: { name: created.customerName, phone: created.phone },
+          assignedStaff: created.coordinator ? { name: created.coordinator } : undefined,
+          notes: `Funeral case logged. Service location: ${created.serviceLocation || 'Harare'}.`,
+        })
+      }
+      res.status(201).json(created)
     }
   })
 
@@ -720,8 +808,41 @@ export function createOperationsRouter(): Router {
       }
 
       res.json(updated)
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
+    } catch {
+      const { id } = req.params
+      const body = req.body
+      const cases = inMemoryOperationsStore.cases || []
+      const idx = cases.findIndex((c: any) => c.id === id)
+      if (idx === -1) {
+        res.status(404).json({ code: 'not_found', message: 'Operation case not found.' })
+        return
+      }
+      const existing = cases[idx]
+      const updated = {
+        ...existing,
+        ...body,
+        id: existing.id,
+        updatedAt: new Date().toISOString(),
+      }
+      delete (updated as any).auditAction
+      delete (updated as any).auditSummary
+      cases[idx] = updated
+      if (body.auditAction && body.auditSummary) {
+        inMemoryOperationsStore.audit = [
+          {
+            id: `audit-${randomUUID()}`,
+            at: new Date().toISOString(),
+            actor: req.sessionUser?.phoneNumber || 'Admin',
+            action: body.auditAction,
+            entity: updated.reference,
+            summary: body.auditSummary,
+            demo: Boolean(updated.demo),
+          },
+          ...(inMemoryOperationsStore.audit || []),
+        ].slice(0, 200)
+      }
+      savePersistedOpsState(inMemoryOperationsStore)
+      res.json(updated)
     }
   }
   router.put('/operations/cases/:id', handleUpdateCase)
@@ -766,8 +887,59 @@ export function createOperationsRouter(): Router {
       })
 
       res.status(201).json(created)
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
+    } catch {
+      const body = req.body
+      const now = new Date().toISOString()
+      const created = {
+        id: body.id || `case-${randomUUID()}`,
+        reference: body.reference || `CASE-${Math.floor(1000 + Math.random() * 9000)}`,
+        caseType: body.caseType || 'cash-walk-in',
+        customerName: body.customerName || 'Walk-in Customer',
+        phone: body.phone || '',
+        deceasedName: body.deceasedName || 'Not specified',
+        dateOfDeath: body.dateOfDeath || now.slice(0, 10),
+        serviceLocation: body.serviceLocation || 'Harare',
+        branch: body.branch || 'Harare',
+        funeralAt: body.funeralAt || null,
+        funeralLocation: body.funeralLocation || '',
+        coordinator: body.coordinator || '',
+        priority: body.priority || 'standard',
+        priorityReason: body.priorityReason || '',
+        status: body.status || 'new',
+        policyReference: body.policyReference || null,
+        intakeChannel: body.intakeChannel || 'staff',
+        postMortem: body.postMortem || 'pending',
+        stages: body.stages || createCaseStages(),
+        checklist: body.checklist || [],
+        documents: body.documents || [],
+        movements: body.movements || [],
+        quotes: body.quotes || [],
+        payments: body.payments || [],
+        contributions: body.contributions || [],
+        walletGoal: body.walletGoal || null,
+        demo: Boolean(body.demo),
+        createdAt: now,
+        updatedAt: now,
+      }
+      inMemoryOperationsStore.cases = [created, ...(inMemoryOperationsStore.cases || [])]
+      savePersistedOpsState(inMemoryOperationsStore)
+      if (created.phone) {
+        void createWhatsAppFuneralGroup({
+          caseReference: created.reference,
+          deceasedName: created.deceasedName,
+          customerName: created.customerName,
+          familyPhone: created.phone,
+        })
+        void dispatchWorkflowNotifications({
+          event: created.caseType === 'cash-walk-in' ? 'walkin_request' : 'customer_self_request',
+          caseReference: created.reference,
+          deceasedName: created.deceasedName,
+          customer: { name: created.customerName, phone: created.phone },
+          assignedStaff: created.coordinator ? { name: created.coordinator } : undefined,
+          notes: `Funeral case logged. Service location: ${created.serviceLocation || 'Harare'}.`,
+        })
+      }
+      res.status(201).json(created)
     }
   })
 
@@ -813,8 +985,41 @@ export function createOperationsRouter(): Router {
       }
 
       res.json(updated)
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
+    } catch {
+      const { id } = req.params
+      const body = req.body
+      const cases = inMemoryOperationsStore.cases || []
+      const idx = cases.findIndex((c: any) => c.id === id)
+      if (idx === -1) {
+        res.status(404).json({ code: 'not_found', message: 'Operation case not found.' })
+        return
+      }
+      const existing = cases[idx]
+      const updated = {
+        ...existing,
+        ...body,
+        id: existing.id,
+        updatedAt: new Date().toISOString(),
+      }
+      delete (updated as any).auditAction
+      delete (updated as any).auditSummary
+      cases[idx] = updated
+      if (body.auditAction && body.auditSummary) {
+        inMemoryOperationsStore.audit = [
+          {
+            id: `audit-${randomUUID()}`,
+            at: new Date().toISOString(),
+            actor: req.sessionUser?.phoneNumber || 'Admin',
+            action: body.auditAction,
+            entity: updated.reference,
+            summary: body.auditSummary,
+            demo: Boolean(updated.demo),
+          },
+          ...(inMemoryOperationsStore.audit || []),
+        ].slice(0, 200)
+      }
+      savePersistedOpsState(inMemoryOperationsStore)
+      res.json(updated)
     }
   }
   router.put('/operations/policies/:id', handleUpdatePolicy)
@@ -842,8 +1047,24 @@ export function createOperationsRouter(): Router {
         },
       })
       res.json(item)
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
+    } catch {
+      const body = req.body
+      const id = body.id || `cat-${randomUUID()}`
+      const list = inMemoryOperationsStore.catalogue || []
+      const idx = list.findIndex((c: any) => c.id === id)
+      const item = {
+        id,
+        name: body.name,
+        category: body.category,
+        description: body.description || '',
+        active: body.active ?? true,
+        createdAt: idx >= 0 ? list[idx].createdAt : new Date().toISOString(),
+      }
+      if (idx >= 0) list[idx] = item
+      else list.push(item)
+      inMemoryOperationsStore.catalogue = list
+      savePersistedOpsState(inMemoryOperationsStore)
+      res.json(item)
     }
   })
 
@@ -905,52 +1126,27 @@ export function createOperationsRouter(): Router {
       }
 
       res.json(exh)
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
-    }
-  })
-
-  // PUT /api/admin/operations/exhumations/:id
-  router.put('/operations/exhumations/:id', async (req, res, next) => {
-    try {
-      const { id } = req.params
+    } catch {
       const body = req.body
-      const exh = await prisma.operationExhumation.update({
-        where: { id },
-        data: {
-          ...(body.customerName ? { customerName: body.customerName } : {}),
-          ...(body.phone !== undefined ? { phone: body.phone } : {}),
-          ...(body.deceasedName ? { deceasedName: body.deceasedName } : {}),
-          ...(body.address ? { address: body.address } : {}),
-          ...(body.destinationAddress ? { destinationAddress: body.destinationAddress } : {}),
-          ...(body.requestedAt ? { requestedAt: body.requestedAt } : {}),
-          ...(body.status ? { status: body.status } : {}),
-          ...(body.estimatedCost !== undefined ? { estimatedCost: body.estimatedCost ? Number(body.estimatedCost) : null } : {}),
-          ...(body.quotedPrice !== undefined ? { quotedPrice: body.quotedPrice ? Number(body.quotedPrice) : null } : {}),
-          ...(body.permitReference !== undefined ? { permitReference: body.permitReference } : {}),
-          ...(body.permitStatus ? { permitStatus: body.permitStatus } : {}),
-          ...(body.requirements ? { requirements: body.requirements } : {}),
-          ...(body.notes !== undefined ? { notes: body.notes } : {}),
-        },
-      })
-
-      if (exh.phone) {
-        void notifyDual({
-          customerPhone: exh.phone,
-          kind: 'exhumation.received',
-          payload: {
-            reference: exh.reference,
-            deceasedName: exh.deceasedName,
-            address: exh.address,
-            destinationAddress: exh.destinationAddress,
-          },
-          adminAlertKind: 'exhumation.received',
-        })
+      const id = body.id || `exh-${randomUUID()}`
+      const now = new Date().toISOString()
+      const list = inMemoryOperationsStore.exhumations || []
+      const idx = list.findIndex((e: any) => e.id === id)
+      const exh = {
+        ...(idx >= 0 ? list[idx] : {}),
+        ...body,
+        id,
+        reference: body.reference || (idx >= 0 ? list[idx].reference : `EXH-${Math.floor(1000 + Math.random() * 9000)}`),
+        currency: body.currency || 'USD',
+        requirements: Array.isArray(body.requirements) ? body.requirements : (idx >= 0 ? list[idx].requirements : []),
+        createdAt: idx >= 0 ? list[idx].createdAt : now,
+        updatedAt: now,
       }
-
+      if (idx >= 0) list[idx] = exh
+      else list.unshift(exh)
+      inMemoryOperationsStore.exhumations = list
+      savePersistedOpsState(inMemoryOperationsStore)
       res.json(exh)
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
     }
   })
 
@@ -960,8 +1156,11 @@ export function createOperationsRouter(): Router {
       const { id } = req.params
       await prisma.operationExhumation.delete({ where: { id } })
       res.json({ ok: true, id })
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
+    } catch {
+      const { id } = req.params
+      inMemoryOperationsStore.exhumations = (inMemoryOperationsStore.exhumations || []).filter((e: any) => e.id !== id)
+      savePersistedOpsState(inMemoryOperationsStore)
+      res.json({ ok: true, id })
     }
   })
 
@@ -983,8 +1182,16 @@ export function createOperationsRouter(): Router {
         },
       })
       res.json(tc)
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
+    } catch {
+      const { feature, enabled, amount } = req.body
+      const list = inMemoryOperationsStore.tokenCharges || []
+      const idx = list.findIndex((t: any) => t.feature === feature)
+      const tc = { feature, label: req.body.label || (idx >= 0 ? list[idx].label : feature), enabled: Boolean(enabled), amount: amount ? Number(amount) : undefined }
+      if (idx >= 0) list[idx] = tc
+      else list.push(tc)
+      inMemoryOperationsStore.tokenCharges = list
+      savePersistedOpsState(inMemoryOperationsStore)
+      res.json(tc)
     }
   })
 
@@ -1003,8 +1210,20 @@ export function createOperationsRouter(): Router {
         },
       })
       res.status(201).json(entry)
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
+    } catch {
+      const { actor, action, entity, summary, demo } = req.body
+      const entry = {
+        id: `audit-${randomUUID()}`,
+        at: new Date().toISOString(),
+        actor: actor || req.sessionUser?.phoneNumber || 'Admin',
+        action,
+        entity,
+        summary,
+        demo: Boolean(demo),
+      }
+      inMemoryOperationsStore.audit = [entry, ...(inMemoryOperationsStore.audit || [])].slice(0, 200)
+      savePersistedOpsState(inMemoryOperationsStore)
+      res.status(201).json(entry)
     }
   })
 
@@ -1019,8 +1238,11 @@ export function createOperationsRouter(): Router {
       await prisma.operationTokenCharge.deleteMany({})
       await seedInitialOperationsData()
       res.json({ ok: true, message: 'Operations workspace reset to default demo seed.' })
-    } catch (error) {
-      res.json(inMemoryOperationsStore)
+    } catch {
+      const fresh = createSeedOperationsStore()
+      Object.assign(inMemoryOperationsStore, fresh)
+      savePersistedOpsState(inMemoryOperationsStore)
+      res.json({ ok: true, message: 'Operations workspace reset to default demo seed.' })
     }
   })
 
@@ -1086,161 +1308,298 @@ export function createOperationsRouter(): Router {
   })
 
   // GET /api/admin/requests
-  router.get('/requests', async (_req, res) => {
-    const now = new Date()
-    res.json([
-      {
-        id: 'AR-1049',
-        reference: 'AR-1049',
-        kind: 'bereavement',
-        contactPreference: 'call',
-        bestTimeToCall: 'Morning',
-        message: 'Assistance required for burial setup and repatriation in Borrowdale.',
+  router.get('/requests', async (req, res) => {
+    const statusFilter = typeof req.query.status === 'string' ? req.query.status : undefined
+    const all = listStoredRequests()
+    res.json(statusFilter ? all.filter((r) => r.status === statusFilter) : all)
+  })
+
+  // POST /api/admin/requests
+  router.post('/requests', async (req, res) => {
+    const body = req.body || {}
+    const customerName = String(body.customerName || '').trim()
+    if (!customerName) {
+      res.status(422).json({ code: 'validation_failed', message: 'Customer name is required.' })
+      return
+    }
+    const now = new Date().toISOString()
+    const rawKind = String(body.kind || 'general')
+    const kind: StoredRequest['kind'] =
+      rawKind === 'bereavement' || rawKind === 'funeral_support' || rawKind === 'repatriation' || rawKind === 'exhumation'
+        ? 'bereavement'
+        : rawKind === 'claim'
+          ? 'claim'
+          : 'general'
+    const ref = String(body.reference || `AR-${Math.floor(1051 + Math.random() * 8900)}`)
+    const created: StoredRequest = {
+      id: ref,
+      reference: ref,
+      kind,
+      contactPreference: (body.contactPreference || 'whatsapp') as StoredRequest['contactPreference'],
+      message: String(body.message || '').trim() || 'Urgent assistance request logged by administrator.',
+      status: 'received',
+      urgent: true,
+      actions: ['assign'],
+      customer: {
+        id: `u-${Date.now().toString(36)}`,
+        name: customerName,
+        phone: String(body.phone || '').trim(),
+        email: String(body.email || '').trim() || undefined,
+      },
+      statusHistory: [
+        { status: 'received', label: 'Received', at: now, note: 'Logged by administrator' },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    }
+    const all = listStoredRequests()
+    all.unshift(created)
+    saveStoredRequests(all)
+    res.status(201).json(created)
+  })
+
+  // POST /api/admin/requests/:id/assignment
+  router.post('/requests/:id/assignment', async (req, res) => {
+    const { id } = req.params
+    const providerId = String(req.body?.providerId || '').trim()
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim() : undefined
+    if (!providerId) {
+      res.status(422).json({ code: 'validation_failed', message: 'Choose a Fidelity Staff member.' })
+      return
+    }
+    const staff = KNOWN_STAFF.find((s) => s.id === providerId || s.name.toLowerCase() === providerId.toLowerCase())
+    const providerNames: Record<string, string> = {
+      'harare-funeral-care': 'Harare Funeral Care',
+      'bulawayo-memorial': 'Bulawayo Memorial & Cremations',
+    }
+    const providerName = staff?.name || providerNames[providerId]
+    if (!providerName) {
+      res.status(422).json({ code: 'validation_failed', message: 'Selected staff member or provider was not found.' })
+      return
+    }
+    const all = listStoredRequests()
+    const idx = all.findIndex((r) => r.id === id)
+    if (idx === -1) {
+      res.status(404).json({ code: 'not_found', message: 'Request not found.' })
+      return
+    }
+    const now = new Date().toISOString()
+    const current = all[idx]
+    const updated: StoredRequest = {
+      ...current,
+      status: 'assigned',
+      assignedTo: providerName,
+      assignment: {
+        providerId,
+        providerName,
         status: 'assigned',
-        deceasedName: 'Tariro Moyo',
-        dateOfDeath: now.toISOString().slice(0, 10),
-        serviceLocation: 'Borrowdale, Harare',
-        urgent: true,
-        actions: ['assign', 'completed'],
-        customer: { id: 'u-moyo', name: 'Rutendo Moyo', phone: '+263771234567', policyNumber: 'FLA-POL-8821', policyStatus: 'active' },
-        assignment: {
-          providerId: 'harare-funeral-care',
-          providerName: 'Harare Funeral Care',
-          status: 'accepted',
-          assignedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-          respondedAt: new Date(Date.now() - 3600000).toISOString(),
-          note: 'Coordinator assigned to oversee mortuary transit and equipment.',
+        assignedAt: now,
+        ...(note ? { note } : {}),
+      },
+      actions: ['assign', 'accepted', 'declined', 'completed'],
+      statusHistory: [
+        ...(current.statusHistory || []),
+        { status: 'assigned', label: 'Adviser assigned', at: now, note: `Assigned to ${providerName}` },
+      ],
+      updatedAt: now,
+    }
+    all[idx] = updated
+    saveStoredRequests(all)
+
+    void dispatchWorkflowNotifications({
+      event: 'case_assigned',
+      caseReference: updated.reference,
+      deceasedName: updated.deceasedName,
+      customer: updated.customer.phone
+        ? {
+            name: updated.customer.name,
+            phone: updated.customer.phone,
+            email: updated.customer.email,
+            contactPreference: updated.contactPreference,
+          }
+        : undefined,
+      assignedStaff: {
+        name: providerName,
+        phone: staff?.phone,
+        email: staff?.email,
+      },
+      notes: note,
+    })
+
+    res.json(updated)
+  })
+
+  // PATCH /api/admin/requests/:id/assignment
+  router.patch('/requests/:id/assignment', async (req, res) => {
+    const { id } = req.params
+    const action = String(req.body?.status || '') as 'accepted' | 'declined' | 'completed'
+    if (!['accepted', 'declined', 'completed'].includes(action)) {
+      res.status(422).json({ code: 'validation_failed', message: 'Invalid assignment status.' })
+      return
+    }
+    const all = listStoredRequests()
+    const idx = all.findIndex((r) => r.id === id)
+    if (idx === -1) {
+      res.status(404).json({ code: 'not_found', message: 'Request not found.' })
+      return
+    }
+    const now = new Date().toISOString()
+    const current = all[idx]
+    const nextStatus: StoredRequest['status'] =
+      action === 'accepted' ? 'in_progress' : action === 'completed' ? 'complete' : 'received'
+    const nextLabel =
+      action === 'accepted' ? 'In progress' : action === 'completed' ? 'Complete' : 'Received'
+    const updated: StoredRequest = {
+      ...current,
+      status: nextStatus,
+      assignment: current.assignment
+        ? { ...current.assignment, status: action, respondedAt: now }
+        : undefined,
+      actions: action === 'completed' ? [] : action === 'accepted' ? ['assign', 'completed'] : ['assign'],
+      statusHistory: [
+        ...(current.statusHistory || []),
+        {
+          status: nextStatus,
+          label: nextLabel,
+          at: now,
+          note: `${current.assignment?.providerName || 'Fidelity Operations'} marked ${action}`,
         },
-        createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-        updatedAt: new Date(Date.now() - 3600000).toISOString(),
-      },
-      {
-        id: 'AR-1050',
-        reference: 'AR-1050',
-        kind: 'bereavement',
-        contactPreference: 'whatsapp',
-        bestTimeToCall: 'Anytime',
-        message: 'Immediate collection requested from Chitungwiza hospital.',
-        status: 'received',
-        deceasedName: 'Sekuru Munemo',
-        dateOfDeath: now.toISOString().slice(0, 10),
-        serviceLocation: 'Chitungwiza',
-        urgent: true,
-        actions: ['assign'],
-        customer: { id: 'u-munemo', name: 'Grace Munemo', phone: '+263774888999' },
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-        updatedAt: new Date(Date.now() - 3600000).toISOString(),
-      },
-    ])
+      ],
+      updatedAt: now,
+    }
+    all[idx] = updated
+    saveStoredRequests(all)
+    res.json(updated)
   })
 
   // GET /api/admin/orders
-  router.get('/orders', async (_req, res) => {
+  router.get('/orders', async (req, res) => {
+    const statusFilter = typeof req.query.status === 'string' ? req.query.status : undefined
+    const all = listStoredOrders()
+    res.json(statusFilter ? all.filter((o) => o.status === statusFilter) : all)
+  })
+
+  // POST /api/admin/orders (walk-in order)
+  router.post('/orders', async (req, res) => {
+    const body = req.body || {}
+    const customerName = String(body.customerName || '').trim()
+    const product = String(body.product || '').trim()
+    if (!customerName || !product) {
+      res.status(422).json({ code: 'validation_failed', message: 'Customer name and product are required.' })
+      return
+    }
+    const amount = Math.max(0, Number(body.amount) || 0)
+    const phone = String(body.phone || '').trim()
+    const method = String(body.paymentMethod || 'cash')
+    const notes = String(body.notes || '').trim()
     const now = new Date().toISOString()
-    res.json([
-      {
-        id: 'ORD-101',
-        reference: 'FS-1042',
+    const id = `ORD-${Date.now().toString(36).toUpperCase()}`
+    const reference = `FS-${Math.floor(1050 + Math.random() * 8900)}`
+    const order: StoredOrder = {
+      id,
+      reference,
+      status: 'paid',
+      customer: { id: `u-${Date.now().toString(36)}`, name: customerName, phone: phone || 'Walk-in' },
+      lines: [
+        {
+          itemId: `walkin-${Date.now().toString(36)}`,
+          title: product,
+          optionLabels: ['Walk-in order'],
+          quantity: 1,
+          unitPrice: amount,
+          lineTotal: amount,
+          ...(notes ? { personalisation: notes } : {}),
+          provider: 'Fidelity Operations Desk',
+        },
+      ],
+      subtotal: amount,
+      deliveryFee: 0,
+      total: amount,
+      delivery: {
+        recipientName: customerName,
+        phone: phone || 'Walk-in',
+        town: 'Harare',
+        address: notes || 'Branch walk-in pickup',
+        neededBy: now.slice(0, 10),
+        ...(notes ? { notes } : {}),
+      },
+      payment: {
+        method,
         status: 'paid',
-        customer: { id: 'u-moyo', name: 'Rutendo Moyo', phone: '+263771234567' },
-        lines: [
-          {
-            itemId: 'casket-oak',
-            title: 'Standard Oak Casket',
-            optionLabels: ['Polished Oak', 'Brass Fittings'],
-            quantity: 1,
-            unitPrice: 850,
-            lineTotal: 850,
-            personalisation: 'Rest In Peace',
-            provider: 'Harare Funeral Supplies',
-          },
-        ],
-        subtotal: 850,
-        deliveryFee: 0,
-        total: 850,
-        delivery: {
-          recipientName: 'Rutendo Moyo',
-          phone: '+263771234567',
-          town: 'Harare',
-          address: '42 Ridgeway North, Borrowdale, Harare',
-          neededBy: '2026-11-24',
-        },
-        payment: {
-          method: 'ecocash',
-          status: 'paid',
-          reference: 'PAY-ECO-8812',
-          amount: 850,
-          paidAt: now,
-        },
-        events: [{ at: now, label: 'Order placed & paid via EcoCash' }],
-        scoped: false,
-        shared: false,
-        actions: ['confirmed'],
-        createdAt: now,
+        reference: `PAY-WALKIN-${Math.floor(1000 + Math.random() * 9000)}`,
+        amount,
+        paidAt: now,
       },
-      {
-        id: 'ORD-102',
-        reference: 'FS-1043',
-        status: 'in_progress',
-        customer: { id: 'u-munemo', name: 'Grace Munemo', phone: '+263774888999' },
-        lines: [
-          {
-            itemId: 'casket-dome',
-            title: 'Dome Casket (Mahogany Finish)',
-            optionLabels: ['Mahogany Gloss', 'Silver Trim'],
-            quantity: 1,
-            unitPrice: 1650,
-            lineTotal: 1650,
-            personalisation: 'Forever in our hearts',
-            provider: 'Fidelity Heritage Supplies',
-          },
-        ],
-        subtotal: 1650,
-        deliveryFee: 0,
-        total: 1650,
-        delivery: {
-          recipientName: 'Grace Munemo',
-          phone: '+263774888999',
-          town: 'Harare',
-          address: '15 Enterprise Rd, Highlands, Harare',
-          neededBy: '2026-11-25',
-        },
-        payment: {
-          method: 'paynow',
-          status: 'paid',
-          reference: 'PAY-PN-4921',
-          amount: 1650,
-          paidAt: now,
-        },
-        events: [
-          { at: now, label: 'Order placed' },
-          { at: now, label: 'Being prepared by workshop' },
-        ],
-        scoped: false,
-        shared: false,
-        actions: ['delivered'],
-        createdAt: now,
-      },
-    ])
+      events: [{ at: now, label: `Walk-in order recorded (${method.toUpperCase()})` }],
+      scoped: false,
+      shared: false,
+      actions: ['confirmed'],
+      createdAt: now,
+    }
+    const all = listStoredOrders()
+    all.unshift(order)
+    saveStoredOrders(all)
+
+    if (phone && phone.startsWith('+')) {
+      const smsProvider = createSmsProvider()
+      void smsProvider.send(phone, `Fidelity Life: Walk-in order ${reference} for ${product} ($${amount.toFixed(2)}) confirmed. Thank you.`).catch(() => {})
+      void sendWhatsAppAlert(phone, 'custom', {
+        customMessage: `🌿 *Fidelity Life Assurance — Walk-in Order Confirmed*\n\nReference: *${reference}*\nCustomer: *${customerName}*\nItem: *${product}*\nAmount: *$${amount.toFixed(2)}* (${method.toUpperCase()})\n\nThank you for trusting Fidelity Life Assurance.`,
+      })
+    }
+
+    res.status(201).json(order)
+  })
+
+  // PATCH /api/admin/orders/:id
+  router.patch('/orders/:id', async (req, res) => {
+    const { id } = req.params
+    const nextStatus = String(req.body?.status || '')
+    const all = listStoredOrders()
+    const idx = all.findIndex((o) => o.id === id)
+    if (idx === -1) {
+      res.status(404).json({ code: 'not_found', message: 'Order not found.' })
+      return
+    }
+    const current = all[idx]
+    const updated: StoredOrder = {
+      ...current,
+      status: nextStatus || current.status,
+      events: [...current.events, { at: new Date().toISOString(), label: `Status updated to ${nextStatus}` }],
+      actions: nextStatus === 'confirmed' ? ['in_progress'] : nextStatus === 'in_progress' ? ['delivered'] : [],
+    }
+    all[idx] = updated
+    saveStoredOrders(all)
+    res.json(updated)
   })
 
   // GET /api/admin/customers
   router.get('/customers', async (_req, res) => {
-    res.json([
-      {
-        id: 'u-moyo',
-        name: 'Rutendo Moyo',
-        phone: '+263771234567',
-        email: 'rutendo.moyo@example.com',
-        policyNumber: 'FLA-POL-8821',
-        policyStatus: 'active',
-        requestCount: 1,
-        openRequests: 1,
-        orderCount: 1,
-        memorialCount: 1,
-        totalSpend: 850,
-      },
-      {
+    const requests = listStoredRequests()
+    const orders = listStoredOrders()
+    const users = listFallbackUsers()
+    const byId = new Map<string, any>()
+
+    for (const u of users) {
+      const userReqs = requests.filter((r) => r.customer.id === u.id || (u.phone && r.customer.phone === u.phone))
+      const userOrds = orders.filter((o) => o.customer.id === u.id || (u.phone && o.customer.phone === u.phone))
+      byId.set(u.id, {
+        id: u.id,
+        name: u.name,
+        phone: u.phone,
+        email: u.email,
+        policyNumber: u.id === 'u-moyo' ? 'FLA-POL-8821' : undefined,
+        policyStatus: u.id === 'u-moyo' ? 'active' : undefined,
+        requestCount: userReqs.length,
+        openRequests: userReqs.filter((r) => r.status !== 'complete' && r.status !== 'cancelled').length,
+        orderCount: userOrds.length,
+        memorialCount: u.id === 'u-moyo' ? 1 : 0,
+        totalSpend: userOrds.reduce((sum, o) => sum + (o.total || 0), 0),
+      })
+    }
+
+    if (!byId.has('u-munemo')) {
+      byId.set('u-munemo', {
         id: 'u-munemo',
         name: 'Grace Munemo',
         phone: '+263774888999',
@@ -1249,8 +1608,36 @@ export function createOperationsRouter(): Router {
         orderCount: 1,
         memorialCount: 0,
         totalSpend: 1650,
-      },
-    ])
+      })
+    }
+
+    res.json(Array.from(byId.values()))
+  })
+
+  // GET /api/admin/customers/:id
+  router.get('/customers/:id', async (req, res) => {
+    const { id } = req.params
+    const user = findFallbackUserById(id)
+    const requests = listStoredRequests().filter((r) => r.customer.id === id || (user?.phone && r.customer.phone === user.phone))
+    const orders = listStoredOrders().filter((o) => o.customer.id === id || (user?.phone && o.customer.phone === user.phone))
+    if (!user && id !== 'u-munemo') {
+      res.status(404).json({ code: 'not_found', message: 'Customer not found.' })
+      return
+    }
+    const base = user
+      ? { id: user.id, name: user.name, phone: user.phone, email: user.email }
+      : { id: 'u-munemo', name: 'Grace Munemo', phone: '+263774888999' }
+    res.json({
+      ...base,
+      requestCount: requests.length,
+      openRequests: requests.filter((r) => r.status !== 'complete' && r.status !== 'cancelled').length,
+      orderCount: orders.length,
+      memorialCount: 0,
+      totalSpend: orders.reduce((sum, o) => sum + (o.total || 0), 0),
+      requests,
+      orders,
+      memorials: [],
+    })
   })
 
   // GET /api/admin/providers

@@ -268,6 +268,11 @@ export async function dispatchWorkflowNotifications(input: MultiChannelDispatchI
       smsRes = { sent: true, recipient: staffPhone, messageId: `mock-sms-${Date.now()}` }
     }
 
+    // 2b. SMS to Family/Customer on all task assignments & logbook/status updates
+    if (input.customer?.phone && input.customer.phone !== staffPhone && (input.event === 'task_assigned' || input.event === 'task_log_update')) {
+      void smsProvider.send(input.customer.phone, smsText).catch(() => {})
+    }
+
     // 3. Email to Staff
     console.log(`[alerts:email] DISPATCH TO STAFF: to=${staffEmail} subject="${emailSubject}"\n${emailBody}`)
 

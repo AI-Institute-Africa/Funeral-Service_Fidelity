@@ -49,9 +49,9 @@ export default function DashboardPage() {
         <h1>{firstName ? `${firstName}, ` : ''}here’s where things stand.</h1>
         {statusLine ? <p className="account-hero__lead">{statusLine}</p> : <Skeleton width="60%" height="1.2rem" className="account-hero__skeleton" />}
         <div className="account-hero__actions">
-          <Link className="btn btn--primary" to={`${paths.accountRequests}?new=general`}>
+          <Link className="btn btn--primary" to={`${paths.accountRequests}?new=claim`}>
             <Icon name="phone" size={18} />
-            Request assistance
+            Claims &amp; support
           </Link>
           <Link className="btn btn--outline" to={paths.accountPolicy}>
             {policy ? 'View my policy' : 'Link a policy'}

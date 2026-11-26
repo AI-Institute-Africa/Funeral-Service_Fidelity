@@ -28,6 +28,10 @@
   .account-side {
     position: sticky;
     top: calc(var(--header-h) + var(--space-5));
+    max-height: calc(100dvh - var(--header-h) - var(--space-8));
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding-right: var(--space-1);
     display: grid;
     gap: var(--space-5);
   }

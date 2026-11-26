@@ -2,6 +2,8 @@ import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/r
 import { PRIVATE_QUERY_ROOT } from '@/features/auth'
 import {
   assignRequest,
+  createAdminRequest,
+  createWalkInOrder,
   createProvider,
   getCustomer,
   getOverview,
@@ -85,4 +87,15 @@ export function useSetProviderActive() {
       void queryClient.invalidateQueries({ queryKey: ['marketplace'] })
     },
   })
+}
+
+
+export function useCreateAdminRequest() {
+  const refresh = useRefreshPortal()
+  return useMutation({ mutationFn: createAdminRequest, onSuccess: refresh })
+}
+
+export function useCreateWalkInOrder() {
+  const refresh = useRefreshPortal()
+  return useMutation({ mutationFn: createWalkInOrder, onSuccess: refresh })
 }

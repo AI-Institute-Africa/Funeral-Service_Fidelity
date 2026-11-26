@@ -35,7 +35,7 @@ export type Policy = {
 
 export type RequestKind = 'bereavement' | 'claim' | 'general'
 
-export type RequestStatus = 'received' | 'assigned' | 'in_progress' | 'complete'
+export type RequestStatus = 'received' | 'assigned' | 'in_progress' | 'complete' | 'cancelled'
 
 export type ContactPreference = 'call' | 'whatsapp' | 'sms' | 'email'
 

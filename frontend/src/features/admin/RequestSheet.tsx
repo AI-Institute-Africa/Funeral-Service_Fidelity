@@ -22,7 +22,7 @@ const contactLabel = (value?: string) =>
   (value && CONTACT_OPTIONS.find((option) => option.value === value)?.label) ?? value ?? 'Phone call'
 
 export function RequestSheet({ request, onClose }: RequestSheetProps) {
-  const title = request ? (requestKindLabel[request.kind] ?? request.kind ?? 'Assistance Request') : 'Request'
+  const title = request ? (requestKindLabel[request.kind] ?? request.kind ?? 'Claims & Support Request') : 'Request'
   return (
     <Sheet open={Boolean(request)} onClose={onClose} eyebrow={request?.reference} title={title}>
       {request && <RequestBody request={request} />}
@@ -58,7 +58,7 @@ function RequestBody({ request }: { request: AdminRequest }) {
               reference: request.reference,
               customerName: request.customer?.name,
               customerPhone: request.customer?.phone,
-              kindLabel: requestKindLabel[request.kind] ?? 'Assistance Request',
+              kindLabel: requestKindLabel[request.kind] ?? 'Claims & Support Request',
               contactPreference: request.contactPreference,
               message: statusMessages[action],
             }),

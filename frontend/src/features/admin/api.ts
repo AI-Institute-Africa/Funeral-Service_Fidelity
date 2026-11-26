@@ -84,6 +84,29 @@ export async function getOverview(signal?: AbortSignal): Promise<Overview> {
   }
 }
 
+export async function createAdminRequest(input: {
+  reference?: string
+  customerName: string
+  phone?: string
+  email?: string
+  kind?: string
+  message?: string
+  contactPreference?: string
+}): Promise<AdminRequest> {
+  return post<AdminRequest>('/admin/requests', input)
+}
+
+export async function createWalkInOrder(input: {
+  customerName: string
+  phone?: string
+  product: string
+  amount: number
+  paymentMethod: string
+  notes?: string
+}): Promise<AdminOrder> {
+  return post<AdminOrder>('/admin/orders', input)
+}
+
 export async function listRequests(status?: RequestStatus, signal?: AbortSignal): Promise<AdminRequest[]> {
   if (!env.useMock) {
     try {

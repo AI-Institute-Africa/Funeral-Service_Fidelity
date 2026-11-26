@@ -72,3 +72,10 @@ export async function createRequest(input: NewRequest): Promise<AssistanceReques
   const server = await mockServer()
   return mockResponse(server.createRequest(mockUserId(), input), MOCK_WRITE_LATENCY_MS)
 }
+
+export async function cancelRequest(id: string): Promise<AssistanceRequest> {
+  if (!env.useMock) {
+    return await post<AssistanceRequest>(`/me/requests/${encodeURIComponent(id)}/cancel`, {})
+  }
+  throw new Error('Cannot cancel in mock mode')
+}

@@ -1,6 +1,6 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PRIVATE_QUERY_ROOT } from '@/features/auth'
-import { createRequest, getPolicy, linkPolicy, listRequests } from './api'
+import { cancelRequest, createRequest, getPolicy, linkPolicy, listRequests } from './api'
 import type { AssistanceRequest } from './data'
 
 const policyKey = [PRIVATE_QUERY_ROOT, 'policy'] as const
@@ -35,5 +35,17 @@ export function useCreateRequest() {
     mutationFn: createRequest,
     onSuccess: (request) =>
       queryClient.setQueryData<AssistanceRequest[]>(requestsKey, (existing) => [request, ...(existing ?? [])]),
+  })
+}
+
+
+export function useCancelRequest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: cancelRequest,
+    onSuccess: (updated) =>
+      queryClient.setQueryData<AssistanceRequest[]>(requestsKey, (existing) =>
+        (existing ?? []).map((item) => (item.id === updated.id ? updated : item)),
+      ),
   })
 }

@@ -4,6 +4,12 @@ import { z } from 'zod'
 import { env } from '../config/env'
 import { createSmsProvider } from '../alerts/providers/sms'
 import { sendWhatsAppOtp, notifyDual } from '../services/whatsappGateway'
+import { dispatchWorkflowNotifications } from '../services/multiChannelNotifier'
+import {
+  listStoredRequests,
+  saveStoredRequests,
+  type StoredRequest,
+} from '../lib/fallbackPortalStore'
 import {
   createFallbackUser,
   findFallbackUserById,
@@ -353,6 +359,105 @@ export function createAuthRouter(): Router {
     } catch (error) {
       next(error)
     }
+  })
+
+  router.get('/me/requests', requireSession, async (req, res) => {
+    const current = req.sessionUser!
+    const user = await publicUser(current.userId)
+    const all = listStoredRequests()
+    const mine = all.filter(
+      (r) => r.customer.id === current.userId || (user?.phone && r.customer.phone === user.phone),
+    )
+    res.json(mine)
+  })
+
+  router.post('/me/requests', requireSession, async (req, res) => {
+    const parsed = z
+      .object({
+        kind: z.enum(['bereavement', 'claim', 'general']),
+        message: z.string().trim().max(600),
+        contactPreference: z.enum(['call', 'whatsapp', 'sms', 'email']),
+      })
+      .safeParse(req.body)
+    if (!parsed.success) {
+      res.status(422).json({ code: 'validation_failed', message: 'Check the request details and try again.' })
+      return
+    }
+    const current = req.sessionUser!
+    const user = await publicUser(current.userId)
+    const now = new Date().toISOString()
+    const ref = `AR-${Math.floor(1051 + Math.random() * 8900)}`
+    const created: StoredRequest = {
+      id: ref,
+      reference: ref,
+      kind: parsed.data.kind,
+      contactPreference: parsed.data.contactPreference,
+      message: parsed.data.message,
+      status: 'received',
+      urgent: parsed.data.kind === 'bereavement',
+      actions: ['assign'],
+      customer: {
+        id: current.userId,
+        name: user?.name || 'Customer',
+        phone: user?.phone || current.phoneNumber || '',
+        ...(user?.email ? { email: user.email } : {}),
+      },
+      statusHistory: [{ status: 'received', label: 'Received', at: now, note: 'Request submitted' }],
+      createdAt: now,
+      updatedAt: now,
+    }
+    const all = listStoredRequests()
+    all.unshift(created)
+    saveStoredRequests(all)
+
+    if (created.customer.phone) {
+      void dispatchWorkflowNotifications({
+        event: 'customer_self_request',
+        caseReference: created.reference,
+        customer: {
+          name: created.customer.name,
+          phone: created.customer.phone,
+          email: created.customer.email,
+          contactPreference: created.contactPreference,
+        },
+        notes: created.message,
+      })
+    }
+
+    res.status(201).json(created)
+  })
+
+  router.post('/me/requests/:id/cancel', requireSession, async (req, res) => {
+    const { id } = req.params
+    const current = req.sessionUser!
+    const user = await publicUser(current.userId)
+    const all = listStoredRequests()
+    const idx = all.findIndex(
+      (r) => r.id === id && (r.customer.id === current.userId || (user?.phone && r.customer.phone === user.phone)),
+    )
+    if (idx === -1) {
+      res.status(404).json({ code: 'not_found', message: 'Request not found.' })
+      return
+    }
+    const currentReq = all[idx]
+    if (currentReq.status === 'complete' || currentReq.status === 'cancelled') {
+      res.status(422).json({ code: 'validation_failed', message: 'This request can no longer be cancelled.' })
+      return
+    }
+    const now = new Date().toISOString()
+    const updated: StoredRequest = {
+      ...currentReq,
+      status: 'cancelled',
+      actions: [],
+      statusHistory: [
+        ...(currentReq.statusHistory || []),
+        { status: 'cancelled', label: 'Cancelled', at: now, note: 'Cancelled by customer' },
+      ],
+      updatedAt: now,
+    }
+    all[idx] = updated
+    saveStoredRequests(all)
+    res.json(updated)
   })
 
   return router

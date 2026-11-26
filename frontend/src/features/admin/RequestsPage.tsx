@@ -9,7 +9,7 @@ import { formatAge } from '@/lib/format'
 import { formatPhone } from '@/lib/phone'
 import type { AdminRequest } from './data'
 import { assignmentDisplay, requestStatusDisplay, usePortalRole } from './portal-ui'
-import { useRequests } from './queries'
+import { useCreateAdminRequest, useRequests } from './queries'
 import { RequestSheet } from './RequestSheet'
 import './portal.css'
 
@@ -25,6 +25,7 @@ const matches: Record<Filter, (request: AdminRequest, role: 'admin' | 'provider'
 
 /** Modal for creating a new urgent request on the admin side */
 function NewRequestModal({ onClose }: { onClose: () => void }) {
+  const createReq = useCreateAdminRequest()
   const [customerName, setCustomerName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -41,20 +42,36 @@ function NewRequestModal({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     if (!customerName.trim()) return
     const ref = `REQ-ADM-${Date.now().toString(36).toUpperCase()}`
-    void fetch('/api/whatsapp/notify-assistance', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const contactPreference = channels.whatsapp ? 'whatsapp' : channels.sms ? 'sms' : 'email'
+    createReq.mutate(
+      {
         reference: ref,
         customerName: customerName.trim(),
-        customerPhone: phone.trim(),
-        customerEmail: email.trim(),
-        kindLabel: kind,
+        phone: phone.trim(),
+        email: email.trim(),
+        kind,
         message: message.trim(),
-        contactPreference: channels.whatsapp ? 'whatsapp' : channels.sms ? 'sms' : 'email',
-      }),
-    }).catch(() => {})
-    setSubmitted(true)
+        contactPreference,
+      },
+      {
+        onSuccess: () => {
+          void fetch('/api/whatsapp/notify-assistance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reference: ref,
+              customerName: customerName.trim(),
+              customerPhone: phone.trim(),
+              customerEmail: email.trim(),
+              kindLabel: kind,
+              message: message.trim(),
+              contactPreference,
+            }),
+          }).catch(() => {})
+          setSubmitted(true)
+        },
+      },
+    )
   }
 
   if (submitted) {

@@ -2,6 +2,7 @@ import { ApiError } from '@/lib/api-error'
 import { env } from '@/lib/env'
 import { get, patch, post } from '@/lib/http'
 import { mockResponse } from '@/lib/mock'
+import { cart } from '@/features/marketplace/cart'
 import { demoPersonas } from './demo'
 import { readSessionUser, writeSessionUser } from './session'
 import type { OtpReceipt, ProfileUpdate, SignInInput, SignUpInput, User } from './types'
@@ -23,6 +24,7 @@ export async function signIn(input: SignInInput): Promise<User> {
 
 export async function signUp(input: SignUpInput): Promise<User> {
   const user = await post<User>('/auth/signup', input)
+  cart.clear()
   writeSessionUser(user)
   return user
 }
@@ -30,9 +32,11 @@ export async function signUp(input: SignUpInput): Promise<User> {
 export async function signOut(): Promise<void> {
   if (!env.useMock) {
     await post<void>('/auth/signout', undefined)
+    cart.clear()
     writeSessionUser(null)
     return
   }
+  cart.clear()
   writeSessionUser(null)
 }
 

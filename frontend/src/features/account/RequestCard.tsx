@@ -1,6 +1,7 @@
 import { Icon, type IconName } from '@/components/ui/Icon'
 import { StatusChip, type StatusTone } from '@/components/ui/StatusChip'
 import { formatRelativeDays, formatServiceTime } from '@/lib/format'
+import { useCancelRequest } from './queries'
 import {
   requestKindLabel,
   REQUEST_STEPS,
@@ -17,9 +18,11 @@ const statusTone: Record<RequestStatus, StatusTone> = {
   assigned: 'info',
   in_progress: 'warning',
   complete: 'success',
+  cancelled: 'danger',
 }
 
-const statusLabel = (status: RequestStatus) => REQUEST_STEPS.find((step) => step.value === status)?.label ?? status
+const statusLabel = (status: RequestStatus) =>
+  status === 'cancelled' ? 'Cancelled' : (REQUEST_STEPS.find((step) => step.value === status)?.label ?? status)
 
 function buildHistory(request: AssistanceRequest): StatusHistoryEntry[] {
   if (request.statusHistory && request.statusHistory.length > 0) {
@@ -68,8 +71,10 @@ type RequestCardProps = {
 }
 
 export function RequestCard({ request, compact = false }: RequestCardProps) {
+  const cancel = useCancelRequest()
   const currentIndex = REQUEST_STEPS.findIndex((step) => step.value === request.status)
   const history = compact ? [] : buildHistory(request)
+  const canCancel = !compact && request.status !== 'complete' && request.status !== 'cancelled'
 
   return (
     <article className={`request-card${compact ? ' request-card--compact' : ''}`}>
@@ -126,6 +131,23 @@ export function RequestCard({ request, compact = false }: RequestCardProps) {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+          {canCancel && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-3)' }}>
+              <button
+                type="button"
+                className="btn btn--outline btn--sm"
+                style={{ color: '#dc2626', borderColor: '#fecaca' }}
+                disabled={cancel.isPending}
+                onClick={() => {
+                  if (window.confirm(`Cancel request ${request.reference}?`)) {
+                    cancel.mutate(request.id)
+                  }
+                }}
+              >
+                {cancel.isPending ? 'Cancelling…' : 'Cancel request'}
+              </button>
             </div>
           )}
         </>
