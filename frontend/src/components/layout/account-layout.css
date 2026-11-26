@@ -33,7 +33,7 @@
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: rgba(15, 23, 42, 0.3) transparent;
+    scrollbar-color: rgba(15, 23, 42, 0.35) rgba(15, 23, 42, 0.06);
     padding-right: var(--space-2);
     display: grid;
     gap: var(--space-5);
@@ -41,10 +41,10 @@
 
   .account-nav { display: grid; gap: var(--space-1); }
 
-  .account-side::-webkit-scrollbar { width: 6px; }
-  .account-side::-webkit-scrollbar-track { background: transparent; }
-  .account-side::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.28); border-radius: 999px; }
-  .account-side::-webkit-scrollbar-thumb:hover { background: rgba(15, 23, 42, 0.45); }
+  .account-side::-webkit-scrollbar { width: 8px; }
+  .account-side::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.06); border-radius: 999px; }
+  .account-side::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.32); border-radius: 999px; }
+  .account-side::-webkit-scrollbar-thumb:hover { background: rgba(15, 23, 42, 0.5); }
 
   .account-nav__link {
     display: flex;
