@@ -10,8 +10,21 @@ const newPhotoSchema = z.object({
   dataUrl: z.string().max(1_500_000).regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/),
   caption: captionSchema.optional(),
 })
+const newTributeSchema = z.object({
+  authorName: z.string().trim().min(1).max(60),
+  relationship: z.string().trim().max(60).optional(),
+  message: z.string().trim().min(1).max(500),
+})
+const moderationStatusSchema = z.enum(['approved', 'removed'])
+const TRIBUTE_WINDOW_MS = 60 * 60 * 1000
+const TRIBUTES_PER_HOUR = 5
 
 type MemorialPhoto = { id: string; url: string; caption?: string }
+type Tribute = z.infer<typeof newTributeSchema> & {
+  id: string
+  createdAt: string
+  status: 'pending' | 'approved' | 'removed'
+}
 type StoredMemorial = Record<string, unknown> & {
   id: string
   ownerId: string
@@ -66,12 +79,42 @@ export function createMemorialRouter(): Router {
       createdAt: new Date().toISOString(),
     }],
   ])
+  const tributesByMemorial = new Map<string, Tribute[]>([
+    ['m-grace', [
+      {
+        id: 'trib-1',
+        authorName: 'Sipho Moyo',
+        message: 'Auntie Grace, your warmth and guidance shaped our whole family. You will forever live in our memories.',
+        createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+        status: 'approved',
+      },
+      {
+        id: 'trib-2',
+        authorName: 'Tendai Ndlovu',
+        message: 'Thank you for being the most inspiring teacher and mentor. Rest in eternal peace Mrs Nyathi.',
+        createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+        status: 'approved',
+      },
+    ]],
+  ])
+  const tributeHits = new Map<string, number[]>()
   router.use('/me/memorials', requireSession)
 
   function ownedMemorial(req: Request<{ id: string }>, res: Response): StoredMemorial | undefined {
     const memorial = memorialsStore.get(req.params.id)
     if (memorial?.ownerId === req.sessionUser!.userId) return memorial
     res.status(404).json({ code: 'not_found', message: 'Memorial not found.' })
+  }
+
+  function visibleTributeMemorial(req: Request<{ slug: string }>, res: Response): StoredMemorial | undefined {
+    const memorial = Array.from(memorialsStore.values()).find((item) => item.slug === req.params.slug)
+    if (memorial && (memorial.published || memorial.ownerId === req.sessionUser?.userId)) return memorial
+    res.status(404).json({ code: 'not_found', message: 'Memorial not found.' })
+  }
+
+  function updateTributeCounts(memorial: StoredMemorial, tributes: Tribute[]) {
+    memorial.tributeCount = tributes.filter((tribute) => tribute.status === 'approved').length
+    memorial.pendingTributes = tributes.filter((tribute) => tribute.status === 'pending').length
   }
 
   // GET /api/me/memorials
@@ -114,23 +157,48 @@ export function createMemorialRouter(): Router {
   })
 
   // GET /api/memorials/:slug/tributes
-  router.get('/memorials/:slug/tributes', async (_req, res) => {
-    res.json([
-      {
-        id: 'trib-1',
-        author: 'Sipho Moyo',
-        message: 'Auntie Grace, your warmth and guidance shaped our whole family. You will forever live in our memories.',
-        createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-        status: 'approved',
-      },
-      {
-        id: 'trib-2',
-        author: 'Tendai Ndlovu',
-        message: 'Thank you for being the most inspiring teacher and mentor. Rest in eternal peace Mrs Nyathi.',
-        createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-        status: 'approved',
-      },
-    ])
+  router.get('/memorials/:slug/tributes', (req, res) => {
+    const memorial = visibleTributeMemorial(req, res)
+    if (!memorial) return
+    const tributes = tributesByMemorial.get(memorial.id) ?? []
+    res.json(tributes.filter((tribute) => tribute.status === 'approved'))
+  })
+
+  router.post('/memorials/:slug/tributes', (req, res) => {
+    const memorial = visibleTributeMemorial(req, res)
+    if (!memorial) return
+    const parsed = newTributeSchema.safeParse(req.body)
+    if (!parsed.success) {
+      res.status(422).json({ code: 'validation_failed', details: parsed.error.flatten().fieldErrors })
+      return
+    }
+
+    const now = Date.now()
+    const cutoff = now - TRIBUTE_WINDOW_MS
+    for (const [key, hits] of tributeHits) {
+      if (hits[hits.length - 1] <= cutoff) tributeHits.delete(key)
+    }
+    const visitor = `${memorial.id}:${req.ip}`
+    const hits = (tributeHits.get(visitor) ?? []).filter((hit) => hit > cutoff)
+    if (hits.length >= TRIBUTES_PER_HOUR) {
+      res.status(429).json({ code: 'rate_limited', message: 'Too many tributes.' })
+      return
+    }
+    tributeHits.set(visitor, [...hits, now])
+
+    const { authorName, relationship, message } = parsed.data
+    const tribute: Tribute = {
+      id: randomUUID(),
+      authorName,
+      ...(relationship && { relationship }),
+      message,
+      createdAt: new Date(now).toISOString(),
+      status: memorial.ownerId === req.sessionUser?.userId ? 'approved' : 'pending',
+    }
+    const tributes = [tribute, ...(tributesByMemorial.get(memorial.id) ?? [])]
+    tributesByMemorial.set(memorial.id, tributes)
+    updateTributeCounts(memorial, tributes)
+    res.status(201).json(tribute)
   })
 
   // POST /api/memorials/:slug/offerings
@@ -253,6 +321,32 @@ export function createMemorialRouter(): Router {
     memorial.photos = memorial.photos.filter((photo) => photo.id !== photoId)
     if (memorial.portraitId === photoId) memorial.portraitId = undefined
     res.status(204).end()
+  })
+
+  router.get('/me/memorials/:id/tributes', (req, res) => {
+    const memorial = ownedMemorial(req, res)
+    if (!memorial) return
+    const tributes = tributesByMemorial.get(memorial.id) ?? []
+    res.json(tributes.filter((tribute) => tribute.status !== 'removed'))
+  })
+
+  router.patch('/me/memorials/:id/tributes/:tributeId', (req, res) => {
+    const memorial = ownedMemorial(req, res)
+    if (!memorial) return
+    const tributes = tributesByMemorial.get(memorial.id) ?? []
+    const tribute = tributes.find((item) => item.id === req.params.tributeId && item.status !== 'removed')
+    if (!tribute) {
+      res.status(404).json({ code: 'not_found', message: 'Tribute not found.' })
+      return
+    }
+    const status = moderationStatusSchema.safeParse(req.body?.status)
+    if (!status.success) {
+      res.status(422).json({ code: 'validation_failed', details: { status: 'Choose approved or removed.' } })
+      return
+    }
+    tribute.status = status.data
+    updateTributeCounts(memorial, tributes)
+    res.json(tribute)
   })
 
   return router

@@ -41,6 +41,11 @@ export function useSubmitTribute(slug: string) {
     // Visitor tributes wait for the family; only an approved one (the owner's own) shows straight away.
     onSuccess: (tribute) => {
       if (tribute.status === 'approved') void queryClient.invalidateQueries({ queryKey: tributesKey(slug) })
+      const memorial = queryClient.getQueryData<Memorial>(memorialKey(slug))
+      if (memorial) {
+        void queryClient.invalidateQueries({ queryKey: ownedKey(memorial.id) })
+        void queryClient.invalidateQueries({ queryKey: mineKey, exact: true })
+      }
     },
   })
 }

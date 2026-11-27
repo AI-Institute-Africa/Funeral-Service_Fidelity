@@ -61,25 +61,13 @@ export async function getMemorial(slug: string, signal?: AbortSignal): Promise<M
 }
 
 export async function listTributes(slug: string, signal?: AbortSignal): Promise<Tribute[]> {
-  if (!env.useMock) {
-    try {
-      return await get<Tribute[]>(`${memorialPath(slug)}/tributes`, { signal })
-    } catch {
-      // Fallback
-    }
-  }
+  if (!env.useMock) return get<Tribute[]>(`${memorialPath(slug)}/tributes`, { signal })
   const server = await mockServer()
   return mockResponse(server.listApprovedTributes(slug, viewerId()), MOCK_READ_LATENCY_MS)
 }
 
 export async function submitTribute(slug: string, input: NewTribute): Promise<Tribute> {
-  if (!env.useMock) {
-    try {
-      return await post<Tribute>(`${memorialPath(slug)}/tributes`, input)
-    } catch {
-      // Fallback
-    }
-  }
+  if (!env.useMock) return post<Tribute>(`${memorialPath(slug)}/tributes`, input)
   const server = await mockServer()
   return mockResponse(server.addTribute(slug, viewerId(), input), MOCK_WRITE_LATENCY_MS)
 }
@@ -208,13 +196,7 @@ export async function captionPhoto(id: string, photoId: string, caption: string)
 }
 
 export async function listMyTributes(id: string, signal?: AbortSignal): Promise<Tribute[]> {
-  if (!env.useMock) {
-    try {
-      return await get<Tribute[]>(`${ownedPath(id)}/tributes`, { signal })
-    } catch {
-      // Fallback
-    }
-  }
+  if (!env.useMock) return get<Tribute[]>(`${ownedPath(id)}/tributes`, { signal })
   const server = await mockServer()
   return mockResponse(server.listOwnerTributes(safeOwnerId(), id), MOCK_READ_LATENCY_MS)
 }
@@ -225,13 +207,7 @@ export async function moderateTribute(
   status: 'approved' | 'removed',
 ): Promise<Tribute> {
   const path = `${ownedPath(id)}/tributes/${encodeURIComponent(tributeId)}`
-  if (!env.useMock) {
-    try {
-      return await patch<Tribute>(path, { status })
-    } catch {
-      // Fallback
-    }
-  }
+  if (!env.useMock) return patch<Tribute>(path, { status })
   const server = await mockServer()
   return mockResponse(server.moderateTribute(safeOwnerId(), id, tributeId, status), MOCK_QUICK_WRITE_LATENCY_MS)
 }

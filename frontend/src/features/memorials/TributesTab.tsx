@@ -1,6 +1,8 @@
+import { Link } from 'react-router-dom'
 import { Callout } from '@/components/ui/Callout'
 import { Icon } from '@/components/ui/Icon'
 import { QueryState } from '@/components/ui/QueryState'
+import { memorialPath } from '@/config/routes'
 import { getErrorMessage } from '@/lib/api-error'
 import { formatRelativeDays } from '@/lib/format'
 import type { OwnedMemorial, Tribute } from './data'
@@ -69,7 +71,14 @@ export function TributesTab({ memorial }: { memorial: OwnedMemorial }) {
           On the page
         </h2>
         {approved.length === 0 ? (
-          <p className="muted">Approved messages in loving memory will be listed here.</p>
+          <>
+            <p className="muted">Approved messages in loving memory will be listed here.</p>
+            <div>
+              <Link className="btn btn--outline btn--sm" to={memorialPath(memorial.slug)}>
+                Add a tribute on the memorial page
+              </Link>
+            </div>
+          </>
         ) : (
           <ul className="moderation">
             {approved.map((tribute) => (
