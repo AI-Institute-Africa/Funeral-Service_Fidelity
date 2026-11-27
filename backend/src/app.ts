@@ -23,6 +23,8 @@ export async function createApp() {
     origin: env.frontendOrigin,
     credentials: true,
   }))
+  // Memorial uploads carry a resized image as a base64 data URL in JSON.
+  app.post('/api/me/memorials/:id/photos', express.json({ limit: '2mb' }))
   app.use(express.json())
   app.use(express.urlencoded({ extended: false })) // Twilio and Africa's Talking post forms
   app.use(requestLogger)

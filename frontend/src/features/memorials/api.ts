@@ -189,38 +189,20 @@ export async function deleteMemorial(id: string): Promise<void> {
 }
 
 export async function addPhoto(id: string, photo: NewPhoto): Promise<MemorialPhoto> {
-  if (!env.useMock) {
-    try {
-      return await post<MemorialPhoto>(`${ownedPath(id)}/photos`, photo)
-    } catch {
-      // Fallback
-    }
-  }
+  if (!env.useMock) return post<MemorialPhoto>(`${ownedPath(id)}/photos`, photo)
   const server = await mockServer()
   return mockResponse(server.addPhoto(safeOwnerId(), id, photo), MOCK_WRITE_LATENCY_MS)
 }
 
 export async function removePhoto(id: string, photoId: string): Promise<void> {
-  if (!env.useMock) {
-    try {
-      return await del(`${ownedPath(id)}/photos/${encodeURIComponent(photoId)}`)
-    } catch {
-      // Fallback
-    }
-  }
+  if (!env.useMock) return del(`${ownedPath(id)}/photos/${encodeURIComponent(photoId)}`)
   const server = await mockServer()
   server.removePhoto(safeOwnerId(), id, photoId)
   return mockResponse(undefined, MOCK_QUICK_WRITE_LATENCY_MS)
 }
 
 export async function captionPhoto(id: string, photoId: string, caption: string): Promise<MemorialPhoto> {
-  if (!env.useMock) {
-    try {
-      return await patch<MemorialPhoto>(`${ownedPath(id)}/photos/${encodeURIComponent(photoId)}`, { caption })
-    } catch {
-      // Fallback
-    }
-  }
+  if (!env.useMock) return patch<MemorialPhoto>(`${ownedPath(id)}/photos/${encodeURIComponent(photoId)}`, { caption })
   const server = await mockServer()
   return mockResponse(server.captionPhoto(safeOwnerId(), id, photoId, caption), MOCK_QUICK_WRITE_LATENCY_MS)
 }

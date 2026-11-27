@@ -1,11 +1,36 @@
-import { Router } from 'express'
+import { randomUUID } from 'node:crypto'
+import { Router, type Request, type Response } from 'express'
+import { z } from 'zod'
+import { requireSession } from '../middleware/session'
 import { FIDELITY_OPERATIONS_PHONE, sendWhatsAppAlert } from '../services/whatsappGateway'
+
+const MAX_PHOTOS = 8
+const captionSchema = z.string().trim().max(140)
+const newPhotoSchema = z.object({
+  dataUrl: z.string().max(1_500_000).regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/),
+  caption: captionSchema.optional(),
+})
+
+type MemorialPhoto = { id: string; url: string; caption?: string }
+type StoredMemorial = Record<string, unknown> & {
+  id: string
+  ownerId: string
+  slug: string
+  published: boolean
+  photos: MemorialPhoto[]
+  portraitId?: string | null
+}
+
+function withVisiblePhotos(memorial: StoredMemorial, viewerId?: string): StoredMemorial {
+  if (memorial.published || memorial.ownerId === viewerId) return memorial
+  return { ...memorial, photos: [], portraitId: undefined }
+}
 
 export function createMemorialRouter(): Router {
   const router = Router()
 
-  const memorialsStore: Record<string, any> = {
-    'm-grace': {
+  const memorialsStore = new Map<string, StoredMemorial>([
+    ['m-grace', {
       id: 'm-grace',
       ownerId: 'u-moyo',
       slug: 'grace-nyathi',
@@ -39,50 +64,53 @@ export function createMemorialRouter(): Router {
       tributeCount: 2,
       pendingTributes: 0,
       createdAt: new Date().toISOString(),
-    },
+    }],
+  ])
+  router.use('/me/memorials', requireSession)
+
+  function ownedMemorial(req: Request<{ id: string }>, res: Response): StoredMemorial | undefined {
+    const memorial = memorialsStore.get(req.params.id)
+    if (memorial?.ownerId === req.sessionUser!.userId) return memorial
+    res.status(404).json({ code: 'not_found', message: 'Memorial not found.' })
   }
 
   // GET /api/me/memorials
-  router.get('/me/memorials', async (_req, res) => {
-    res.json(Object.values(memorialsStore))
+  router.get('/me/memorials', async (req, res) => {
+    res.json(Array.from(memorialsStore.values(), (memorial) => withVisiblePhotos(memorial, req.sessionUser!.userId)))
   })
 
   // GET /api/me/memorials/:id
   router.get('/me/memorials/:id', async (req, res) => {
-    let item = memorialsStore[req.params.id]
+    let item = memorialsStore.get(req.params.id)
     if (!item) {
-      if (req.params.id === 'm-grace') {
-        item = memorialsStore['m-grace']
-      } else {
-        item = {
-          id: req.params.id,
-          ownerId: 'u-moyo',
-          slug: `memorial-${req.params.id}`,
-          name: 'In Loving Memory',
-          born: '1960-01-01',
-          died: '2025-01-01',
-          tagline: '',
-          location: '',
-          published: false,
-          biography: '',
-          timeline: [],
-          photos: [],
-          flowers: 0,
-          candles: 0,
-          tributeCount: 0,
-          pendingTributes: 0,
-          createdAt: new Date().toISOString(),
-        }
-        memorialsStore[req.params.id] = item
+      item = {
+        id: req.params.id,
+        ownerId: req.sessionUser!.userId,
+        slug: `memorial-${req.params.id}`,
+        name: 'In Loving Memory',
+        born: '1960-01-01',
+        died: '2025-01-01',
+        tagline: '',
+        location: '',
+        published: false,
+        biography: '',
+        timeline: [],
+        photos: [],
+        flowers: 0,
+        candles: 0,
+        tributeCount: 0,
+        pendingTributes: 0,
+        createdAt: new Date().toISOString(),
       }
+      memorialsStore.set(item.id, item)
     }
-    res.json(item)
+    res.json(withVisiblePhotos(item, req.sessionUser!.userId))
   })
 
   // GET /api/memorials/:slug
   router.get('/memorials/:slug', async (req, res) => {
-    const item = Object.values(memorialsStore).find((m) => m.slug === req.params.slug) || memorialsStore['m-grace']
-    res.json(item)
+    const item = Array.from(memorialsStore.values()).find((m) => m.slug === req.params.slug) ?? memorialsStore.get('m-grace')!
+    res.json(withVisiblePhotos(item, req.sessionUser?.userId))
   })
 
   // GET /api/memorials/:slug/tributes
@@ -121,7 +149,7 @@ export function createMemorialRouter(): Router {
 
     const created = {
       id,
-      ownerId: 'u-moyo',
+      ownerId: req.sessionUser!.userId,
       slug: `${slug}-${Math.floor(Math.random() * 1000)}`,
       name: body.name || 'In Loving Memory',
       born: body.born || '',
@@ -139,7 +167,7 @@ export function createMemorialRouter(): Router {
       createdAt: new Date().toISOString(),
     }
 
-    memorialsStore[id] = created
+    memorialsStore.set(id, created)
 
     // Dual WhatsApp notification on memorial creation
     try {
@@ -165,14 +193,66 @@ export function createMemorialRouter(): Router {
 
   // PATCH /api/me/memorials/:id
   router.patch('/me/memorials/:id', async (req, res) => {
-    const id = req.params.id
-    const existing = memorialsStore[id] || memorialsStore['m-grace']
+    const existing = ownedMemorial(req, res)
+    if (!existing) return
+    const { portraitId } = req.body ?? {}
+    if (portraitId != null && !existing.photos.some((photo) => photo.id === portraitId)) {
+      res.status(422).json({ code: 'validation_failed', message: 'Choose one of the memorial’s photos.' })
+      return
+    }
     const updated = {
       ...existing,
       ...req.body,
+      id: existing.id,
+      ownerId: existing.ownerId,
+      photos: existing.photos,
     }
-    memorialsStore[id] = updated
+    memorialsStore.set(existing.id, updated)
     res.json(updated)
+  })
+
+  router.post('/me/memorials/:id/photos', (req, res) => {
+    const memorial = ownedMemorial(req, res)
+    if (!memorial) return
+    const parsed = newPhotoSchema.safeParse(req.body)
+    if (!parsed.success) {
+      res.status(422).json({ code: 'validation_failed', details: parsed.error.flatten().fieldErrors })
+      return
+    }
+    if (memorial.photos.length >= MAX_PHOTOS) {
+      res.status(422).json({ code: 'photo_limit', message: 'Photo limit reached.' })
+      return
+    }
+    const { dataUrl, caption } = parsed.data
+    const photo = { id: randomUUID(), url: dataUrl, caption: caption || undefined }
+    memorial.photos.push(photo)
+    res.status(201).json(photo)
+  })
+
+  router.patch('/me/memorials/:id/photos/:photoId', (req, res) => {
+    const memorial = ownedMemorial(req, res)
+    if (!memorial) return
+    const photo = memorial.photos.find((item) => item.id === req.params.photoId)
+    if (!photo) {
+      res.status(404).json({ code: 'not_found', message: 'Photo not found.' })
+      return
+    }
+    const caption = captionSchema.safeParse(req.body?.caption)
+    if (!caption.success) {
+      res.status(422).json({ code: 'validation_failed', message: 'Enter a caption of up to 140 characters.' })
+      return
+    }
+    photo.caption = caption.data || undefined
+    res.json(photo)
+  })
+
+  router.delete('/me/memorials/:id/photos/:photoId', (req, res) => {
+    const memorial = ownedMemorial(req, res)
+    if (!memorial) return
+    const { photoId } = req.params
+    memorial.photos = memorial.photos.filter((photo) => photo.id !== photoId)
+    if (memorial.portraitId === photoId) memorial.portraitId = undefined
+    res.status(204).end()
   })
 
   return router
